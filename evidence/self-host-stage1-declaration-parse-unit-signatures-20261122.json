@@ -1,0 +1,1915 @@
+{
+  "schema": "mncs.self-host.stage1-declaration-parse-unit-signatures-evidence/1",
+  "recorded_at_utc": "2026-11-22T23:55:00Z",
+  "milestone": {
+    "id": "self_host_stage1_decl_parse_unit_signatures_4_32",
+    "callable": "mncs.compiler.decl.v1::parse_unit_signatures<4,32>",
+    "emitter_entrypoint": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable<2048,1024>",
+    "status": "PASSED",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "stage1_to_stage2_rebuild": "UNKNOWN"
+  },
+  "identities": {
+    "locked_stage0_oracle": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "commit": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "binary_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+      "role": "Locked Stage-0 differential oracle (never mutated)"
+    },
+    "canonical_vm": {
+      "repo": "/home/epi13/Documents/Projects/mncs-vm",
+      "commit": "da99dee282336c5acdc91359b14f477745c77f77",
+      "binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+      "binary_sha256": "37dcfa9270d1a79686ce871e7032d9c33cfc0286e3fac18f0125d1f26a7317c7",
+      "role": "Fresh canonical mncs-vm admission and execution runtime"
+    },
+    "isolated_emitter_transport_probe": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "base_commit": "8fa2e7113b86175f447751d5b49b10a91df37e10",
+      "committed_transport_receipt": "evidence/self-host-stage1-declaration-frontier-20261122.json",
+      "environment_session_id": "ses_be773794265101e4",
+      "scratch_id": "scratch_abf6ad47cbe8cf64afbc140cf73fafff",
+      "probe_binary": "/home/epi13/.local/share/mncs-environment/scratch/ses_be773794265101e4/scratch_abf6ad47cbe8cf64afbc140cf73fafff/bin/mncs-stage0-borrowed-arena-probe",
+      "probe_binary_sha256": "b53dd1da77f0b1c40fc8c7f8a26f0849351472283f8a2ea9c91c48ff8b0d53f4",
+      "frontend_rs_sha256": "1ef438d4f499cb454b14e6b1de155e7241a8bc1b3022a92fb3cbccdcdeeb1f57",
+      "role": "Isolated host transport probe for large-project selected-callable native emitter execution (kept strictly separate from locked Stage-0 oracle and canonical mncs-vm)"
+    },
+    "compiler_sources": {
+      "src/compiler/decl.mncs": "d30fa9c43a72a85855d56d0b30f07359e26d64f0f83d5a02f1620dc8cfc4b8b0",
+      "src/compiler/project.mncs": "8ef7230cc45e8adf89dc7048c8db8e014c3d83f83a903221b0606da66e7207b1",
+      "src/compiler/ssa.mncs": "312c9c39e0d1b27a84ab89339beea8afad08513bc64d2247d97c70e5a88a0551",
+      "src/compiler/vm_emit.mncs": "f0eeec26ab8946d38b57bdfcdc5e72f1bbe35bb005e48581c0b83fd0470c462d",
+      "tools/native_vm_artifact.py": "dff584d96528c574b44afabd5af2c8d1d1e7a0453e9700eec4649429c5912cda",
+      "tools/test_native_decl_vm_emit.py": "7c1056871de1841f66e659e7c4a55afc72d8c49e2692630c8f06a92d2d786c6d",
+      "tests/decl_nominal_span_collection_suite.mncs": "0f5c800cd131ee9143fe39b8dbbdf5fbca9b7f5d96eb17afe7d0a713937c25ec"
+    }
+  },
+  "step1_reproduce_1023_1024_boundary": {
+    "status": "reproduced",
+    "boundary_fixture": {
+      "n_1023": {
+        "fn_count_before_records": 1023,
+        "total_fns": 1024,
+        "collect_unit_nominal_type_spans_count": 1,
+        "collect_spans": [
+          [
+            35847,
+            35855,
+            35848
+          ]
+        ],
+        "has_h_Header_span": true,
+        "vm_emit_ok": true,
+        "vm_emit_error": {
+          "error_code": 0,
+          "error_function": 0,
+          "phase": 0,
+          "ssa_kind": 0,
+          "source_start": 0,
+          "source_end": 0
+        }
+      },
+      "n_1024": {
+        "fn_count_before_records": 1024,
+        "total_fns": 1025,
+        "collect_unit_nominal_type_spans_count": 0,
+        "collect_spans": [],
+        "has_h_Header_span": false,
+        "vm_emit_ok": false,
+        "vm_emit_error": {
+          "error_code": 4,
+          "error_function": 1024,
+          "phase": 5,
+          "ssa_kind": 0,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "diagnosis_type": {
+          "tag": "VTRecord",
+          "fields": {
+            "nominal_identity": "pkg.main.v1::Unit[header=h.Header]"
+          }
+        }
+      }
+    },
+    "first_disappearance_point": {
+      "module": "mncs.compiler.decl.v1",
+      "callable": "collect_unit_nominal_type_spans",
+      "file": "src/compiler/decl.mncs",
+      "mechanism": "Single shared `iterate i up_to 1024` cursor walked `unit.fns` first and only transitioned to `unit.records` (`phase = 1`) when `fns` reached `FnDeclList.FNil`. When `len(unit.fns) >= 1024`, all 1,024 iterations were consumed by functions, never inspecting `unit.records` or `unit.enums`.",
+      "real_decl_module_counts": {
+        "fn_count": 1152,
+        "record_count": 37,
+        "enum_count": 12,
+        "dropped_field": "Unit.header: parser.Header (span [7625, 7638] in src/compiler/decl.mncs:116)"
+      }
+    }
+  },
+  "step2_fix_collection_algorithm_in_mncs": {
+    "supported_declaration_bound": 65536,
+    "chunking_strategy": "64 outer chunks of 1024 inner steps (`64 * 1024 = 65,536`) with immediate early exit on list exhaustion (`FnDeclList.FNil`, `RecordDeclList.RNil`, `EnumDeclList.ENil`, `NominalTypeSpanList.NTSNil`, `NominalTypeIdentityList.NTINil`, `NominalReferenceList.NRNil`), matching `collect_call_walk` and `bind_local_callable_identities`.",
+    "preserved_invariants": [
+      "Qualified nominal identity (`dot_pos > start` for `type_kind == 6` and pattern dots)",
+      "Exact source byte spans (`start`, `end`, `dot`) and deterministic declaration-order traversal (`fns -> records -> enums`)",
+      "Canonical qualified record field identity expansion (`type_kind == 6`) in `record_field_type_identity` + 2-pass `resolve_project_nominal_modules`, matching Stage-0 `canonical_value_type`",
+      "Zero-allocation chunked lookups for `nominal_identity_at`, `nominal_identity_by_name`, `nominal_reference_by_identity`, `nominal_marker_reference_by_identity`, `nominal_list_has_span_local`, and `nominal_list_has_identity_local`",
+      "Compact `VmIdentityRef` (`VINone` / `VISome` / `VIIndex`) indexing `record_types` and `finite_types` in `vm_emit.mncs` so `VmType` shrinks 58x and `VmInstruction` shrinks 52x inside the 1 GiB Cranelift canonical arena",
+      "Bounded source-span re-parse (`end` instead of `total`) across all 6 SSA expression source validators in `src/compiler/ssa.mncs`"
+    ],
+    "boundary_verification": {
+      "fn_1023": {
+        "ok": true,
+        "error_code": 0,
+        "record_types_count": 4,
+        "finite_types_count": 1
+      },
+      "fn_1024": {
+        "ok": true,
+        "error_code": 0,
+        "record_types_count": 4,
+        "finite_types_count": 1
+      },
+      "fn_1500_with_record_enum_and_late_fn_qualified_refs": {
+        "ok": true,
+        "error_code": 0,
+        "record_types": [
+          "pkg.main.v1::Boxed[hdr=pkg.hdr.v1::Header[ver=u64]]",
+          "pkg.hdr.v1::Header[ver=u64]",
+          "pkg.pay.v1::Payload[code=u64]",
+          "pkg.late.v1::LateInfo[tag=u64]"
+        ],
+        "finite_types": [
+          "pkg.main.v1::Wrap{WNone|WPay(payload=pkg.pay.v1::Payload[code=u64])}"
+        ]
+      },
+      "fail_closed_checks": {
+        "unresolved_qualified_reference": {
+          "ok": false,
+          "project_ok": false,
+          "vm_emit_ok": false
+        },
+        "wrong_owner_qualified_reference": {
+          "ok": false,
+          "project_ok": false,
+          "vm_emit_ok": false
+        }
+      }
+    },
+    "ambient_mncs_suite": {
+      "suite_file": "tests/decl_nominal_span_collection_suite.mncs",
+      "suite_sha256": "0f5c800cd131ee9143fe39b8dbbdf5fbca9b7f5d96eb17afe7d0a713937c25ec",
+      "obligation_id": "mncs-compiler.decl-nominal-span-collection-native",
+      "tests": [
+        "tests.compiler_decl_nominal_span_collection::nominal_span_collection_reaches_record_enum_and_late_fn_past_1024_fns",
+        "tests.compiler_decl_nominal_span_collection::nominal_identity_lookup_and_merge_reach_past_1024_entries"
+      ],
+      "negative_tamper_proof": {
+        "tamper": "Restored `if steps < 1024` cap in `collect_unit_nominal_type_spans`",
+        "verdict_on_tamper": "FAIL",
+        "failing_test": "tests.compiler_decl_nominal_span_collection::nominal_span_collection_reaches_record_enum_and_late_fn_past_1024_fns",
+        "verdict_after_restore": "PASS"
+      }
+    }
+  },
+  "step3_unit_passthrough_and_real_parse_unit_signatures": {
+    "unit_passthrough_fixture": {
+      "target": "mncs:0.2:function:mncs.test.unit_passthrough.v1::passthrough_unit",
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "emitter_probe": {
+        "elapsed_seconds": 354.628,
+        "request_bytes": 23825737,
+        "response_bytes": 8670916,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 6549868544,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "host_peak_rss_bytes": 127893504,
+      "emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 1,
+        "record_type_count": 20,
+        "finite_type_count": 19,
+        "block_count": 2,
+        "instruction_count": 0,
+        "has_decl_Unit": true,
+        "has_parser_Header": true,
+        "artifact_id": "sha256:26b07e4e0c96a5581ffeaf1b8d59980f4af004d5837815e1680cfbbe5200751d",
+        "artifact_sha256": "cd8bfeac5c0d3a8d108119640dd32d1edc3e6f0a5af438a032d052cca7737b99",
+        "artifact_bytes": 26461
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0,
+        "output": {
+          "artifact_id": "sha256:26b07e4e0c96a5581ffeaf1b8d59980f4af004d5837815e1680cfbbe5200751d",
+          "runtime": {
+            "artifact_schema": "mncs.vm.artifact/1",
+            "build_origin": {
+              "identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e",
+              "receipt": {
+                "assurance": "local build observation; not independent attestation",
+                "build_configuration": {
+                  "cargo_home": null,
+                  "cargo_path": "/usr/bin/cargo",
+                  "cargo_version": "cargo 1.99.1 (5f94df478 2026-08-27) (Fedora 1.99.1-2.fc44)",
+                  "debug": "false",
+                  "encoded_rustflags": "",
+                  "features": {},
+                  "opt_level": "3",
+                  "profile": "release",
+                  "rustc_path": "rustc",
+                  "rustc_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Fedora 1.99.1-2.fc44)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 22.1.8",
+                  "rustflags": null,
+                  "target": "x86_64-unknown-linux-gnu",
+                  "toolchain_executables": {
+                    "cargo": {
+                      "configured_path": "/usr/bin/cargo",
+                      "resolved_path": "/usr/bin/cargo",
+                      "sha256": "c3c091d6338947cc6119e446893cf6fd62676cc5209c27b8df0ddb08ea86d3c3"
+                    },
+                    "rustc": {
+                      "configured_path": "rustc",
+                      "resolved_path": "/usr/bin/rustc",
+                      "sha256": "c4c74a89c2187582c8e774da3f00e403f497b5aa9a6f1369b1bc6c089762bf62"
+                    }
+                  }
+                },
+                "dependency_closure": [
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-vm",
+                    "repository": "mncs-vm",
+                    "revision": "da99dee282336c5acdc91359b14f477745c77f77",
+                    "source_input_count": 24,
+                    "source_inputs_identity": "bf260cb3aae37f4f1ca3552721b0c1a100efc0b7ad957e3266eb06560b487c3f"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-language",
+                    "repository": "mncs-language",
+                    "revision": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                    "source_input_count": 70,
+                    "source_inputs_identity": "8dd08ff5419fabcc27e08d2168928f30f280b9da834a7f0c3ff3d7bb45df36fa"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-compiler",
+                    "repository": "mncs-compiler",
+                    "revision": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "e7396894b68974055cab3d1a3bcd7afe09f2d1bb7f506845e3ce802ee7ce3d6a"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-stdlib",
+                    "repository": "mncs-stdlib",
+                    "revision": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "bc04c2cef8a455077353555ded97c56f67b8766f9c226daa65eac598a64faa54"
+                  }
+                ],
+                "dirty_content_identity": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                "dirty_input_count": 0,
+                "producer_kind": "canonical-mncs-vm",
+                "repository": "mncs-vm",
+                "schema_version": "mncs.vm-build-receipt/1",
+                "source_input_roots": [
+                  "/home/epi13/Documents/Projects/mncs-vm/src",
+                  "/home/epi13/Documents/Projects/mncs-vm/native",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/.cargo/config.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs"
+                ],
+                "source_inputs": {
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml": "e0a2a2359396e5405f8ca033a465c7e8f40cec51424c9774bdb6f3c7581025d4",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src/lib.rs": "84aca94ce2c2d7e75b6f5dca5d902079596a9a4a904355e32c6d7e53a09ddea3",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock": "5b5a36a3b47cf7bd219241f39083e88adfba6b3108cbd660699cdc11435bfb0d",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml": "032debfa0378f56034290f28bbe639f950e07a68b72d58418b9791290bdd4c16",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml": "49c35b50df1a8579d746d3573d02a4f8f8c4264c7ee86517772524cf8ee1b509",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11.rs": "6dfd32181d2d4186202fbb55590b552bad43c5773eddfb2d6224d18f93a80d8b",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11/native_ssa.rs": "5a8e2ec92e35c218914761cb9044eccc9872898ff6010c2fac33d31d526fb7c3",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/composite.rs": "257a4da7b9154e48fd505709a07552cc3bda1b546707443662584c6bcb6f6e76",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/cranelift_backend.rs": "790da95187f6186709ea38b53b388f40752c48b1d59b3fb18c4b4183191dccd8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/external.rs": "132feedf8fbe08f49f5426eb9ad81984739f8c72b04003dfa7a6741b4371f870",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lib.rs": "53dee3c56cb12cea88e377bdfd24fcbaec84edf5a8425308fa97e517d5a8b5e8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/llvm.rs": "41cf6426bf32483e49b0eca73c7bd18088f0f8345d3bbdf520a85ff10edabf73",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lower.rs": "d3d485dad6254bf14b9328870e37ca813c7cd1640ae437532ce16db060b203b4",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/matrix.rs": "9219adb599e3562ce8e90007e71ef0e18e1b5bd2eb2be80e93f149722e6954aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/native.rs": "ba620e0261482bfa3650379520ebc25e877d38d2614cfcdaba851a6f49a83982",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/promises.rs": "e780403f39954350c10bc1cd7ca6ceb93862e6b1834139f2347c6101b51f77c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/scalar.rs": "6a29dc1c5e0d4bbb2530f387abc06570ebc7629e5b6eec7e30e9e67809a9f5f0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/support.rs": "0a80f03fc1bffd5578aac2fe1e8f3388ae7c5aed0a34980ced7df2c7a54fca39",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/wasm.rs": "c116f86d4a61a38a43c3497089106837b0f0f6dbabeb04b4a76c913b8f3670be",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml": "02d35923e047b7551c007fc139e9d65cf2001f3f40108a7085f4aaf7ee3fad5e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/bundle.rs": "0b4afd00223e64445d00f2290759b44faef14b8a50ba1b43b7da33c00a223139",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/frontend.rs": "9adf10dfa8796edcf7f229a878ffbb7579d709b28478008f8640f5d1153d8377",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/inventory.rs": "f6aada06a0a16a303c41133d4193f8acadcec6e21d7f32e6d61792c65eb9a019",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/lib.rs": "ad3c4a6da501f7c695bef06c91b5760c99ce46a4297523884942427592836dc0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/proof_admission.rs": "adc44fe587ccc90fc5d27023601e7a9f7af6eed7eee3ca49f19d841283a796d6",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/resolution.rs": "59a19becba40ee76ff2d8d6aee1ae939c05847ebd8007b11ba1f9c297526ec0f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_map.rs": "f8a35f5dd1847857c8f888ee1c19c35e5dae42fa9a08272dbfa2051127c521e0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_parse_cache.rs": "29eccee42cf5b56d9778e21d412ea3ba066170ef6d1a01ba65d5137fe6643383",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml": "41c4403b88e8a4a6d4a29bafd7bb31d5d1078df2ed070bbbb3c253ca43a109fc",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/authority.rs": "8f374f2ebb4927cdceacf203479c0b8177ac1c6573bf3480d041a04a5291b4ce",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/bindings.rs": "aa9af4484b19fb9633a3977b5ce1f43bec74e81adf819b80930e2e8e90454ba8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/body.rs": "5e639636d703016f269b47a0e940096d1212f2c676b8cdfd374b14a56734be92",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/canonical.rs": "691037d83de76a378971bace208bd85b42dfee1abbce7883aa5c2352ef028f8c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/capability_gap.rs": "454604389c934788e49e70a66f3202e64d02eb0dada5d27d721f2838d296c549",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cfg.rs": "19fc0b2e0a9f06a4c3f3e376ba2973addc448f3bbe098f66768bc8fb54d01e42",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler.rs": "f8fb984fd50cbec85a941500c27a9cb4d41159d5530c0e5c50a19a24b43640c8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler_architecture.rs": "f72246f1a04e236a7fe43994c39027fc48262b40e8dab562a44702c1e16746c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/core.rs": "20e87972dac7c575494864caca4fa53f935844a8962b56bc075a3337382b9f95",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cost.rs": "3cdf93ad0f660848b4cc44817b4f5fd3782f7aea369d91cde320675ea7501f6d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/delta.rs": "d6744b39f442dd76565db0c0407270021ccde2cddd82a8f3faa3807f7218c14d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/evidence.rs": "4108394c40043a2b82b72f29edb266dd5f1e1e05c2bce9a64175bfc5550aea6a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/execution.rs": "e7f22910c5458d0d7c67579978337f01401aac12deb4dc0ebcf8b66fa9b1c01d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/experiment.rs": "537af3b4b4a5fc7ed03d5a223fdfe8134cdbb465d7b565bbf2967af00f66e9aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/fs_resource.rs": "b16c8da2951adb9d536c131fc341913a20ccb8312f03f54fe87faf0e10ecbbaf",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/generics.rs": "2534d7bdd5a3ca233d4ca4a3f233fd579ad3c5c5ca12124d426c337bdcafd19c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/graph.rs": "bd4ebfaa6d34ab4353dfaf41e8797758922311a58be52cbf455749ecc5d6d97d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/identity.rs": "133d738c483a6c55a78b4dec3e124d8a9277b92f24e1cba1717dbb2be46b9cfa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ir.rs": "71972f36f935ba416fa10052fa17168385b01f6de08533f17589cfbe001400fa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/lib.rs": "65c79492db7c533b2aab0a500ec156a4cf61c609a2a4503573032a4a637a820f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/machine_intent.rs": "8bade2451dcfb262805d9779cfc07ae5621bb6c8c00da1aa94178e26b3ae065a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/obligations.rs": "bb52843b98144039438d5f9a39b26c2cb53e4c4ed895762bd48bc22bb760cfa0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process.rs": "453f412434376f525d9f522b7509816428b535e32af8426f4b2d17f17a7490e7",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process_runtime.rs": "61fd703075fa711fa9bcafdc822bde33ba06cfe39a11d4de03686d79ed50ae41",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_dep.rs": "bda0df805f29c068c0d5dff8290ffea9fe29625ab3395f35c881ede933f458ad",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_kernel.rs": "dedcfb2e920632c3b287a4354b0075ed708c003f537e7547e17f7ff7a1a8f20e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_transport.rs": "0c6a2aa2daa940a0cb60a77acc7682a3f707f3f59ed8a23b6dc83e5ba1cc7274",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/provenance.rs": "8520c9e2f22fa95130d7444bef2a8b86e6c9f4185699c58829ad7d0eef00158c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/refinement.rs": "8903d1af63402571255b379ca5f5ac5e99126c4f09fe7ed809fccb971c86f078",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/representation.rs": "35286093187107a46957611ae3715de8bd6356860ca837d9bfd6ffbc112c2b86",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa.rs": "b792862b885757fe3ebcc94bb532b82fbdd77633e50e695fd8bfc13fa1e2a823",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa_execution.rs": "80f619468b65580258fbcf20a4b796f6adc1a762890a46057e14292fb0985434",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/structured.rs": "39be00138bfc95520d314f666291a0e8cfb5a3e6a20e0e62af58d8f7cbb13b0e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/termination.rs": "b7c286dc782c821645e0f23b4284912d7fecf9e062b079bfd3e95e9e0ee18f3e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/translation.rs": "141b55f93d4be65c2a06e56f032b684352d0ee495ec74a1fb5468f3bb02c7425",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/validation.rs": "16256308ceb9c8627eaba804ce61021d016aa055c13e34bf14d141eacaed3ac2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/value_contract.rs": "cd4e61db31c20c60b79b688b14ecccd0b041899d5a8f9eeff453ba3fb6045e4a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verification_facts.rs": "85b6161c32a88c56eb0782ddfe16435246efebea2a6bbeddf5fea8ca5ef30d4d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verifier.rs": "e3ccd43a1182397dd8d8f70177d527d71436561ed5bfff1aea0a816fa47892d8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml": "259dc254a116e0b42be0f2063f33b3b386da1bdd78fd708471458728c2d36e93",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/lib.rs": "62b6e61e29aac72737eec2f3f7f2a5bb17c3feee11a77f2299a8be1ece49b740",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/profile.rs": "951c6664e4200ff2031e5d5b4f576d86c0b2835de98ffcf99a7a642b071bc088",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/source.rs": "7356d99c32bd0fc7939f91914323f1cd779e0e92594af9e7e5ce144aaf3abda7",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs": "02a87c9fe7c8c5f8eee9e177c5090bd57614ad6a05b84a339ebab5b90f61f337",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs": "9d09428028957c4f1002bc86024e6c2b672ec895241484a3e0a46183f3f865a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock": "ae02667ba99ced0c3a6a763cfa6b30bf97b87ff8be4cb0ed02cfb2c4aad69e1d",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml": "50e085047a84c98811814188506efa3932bbe72e8e5953d4cb713c0e27c3047b",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs": "b00fa8dd478074fdac13db3132723d0bc6e5529a56583707e6f77b9bff0173a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs": "f2660a1c88f09d06b90323f0cec961f460281234db898e35423576bfeb3011dc",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.artifact.json": "e20108cd99e66961c9eaf41550ea9b0ed4e5d40dfe128316fb77a3493661eb96",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.mncs": "9ba7929e0428c459d327341466a42eb3f438ccd3a52debf6632c62544b8dcfb9",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.artifact.json": "f1480eee0afc7a45962966a073981fe4dfa9a213d23efd642cc764dcd21c023e",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.mncs": "6cce824d95156f8a10ccf300237cfc744ac48c4426aa28bf0e869ad296e6a95a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admission_policy.rs": "0fcc588d6122b497d50f141958b9b0f01d59b9d0fb73489f6f1186c523609504",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admit.rs": "82d57310f558f5d1d4c79af2da3abc9aa1c3c5c34342d7fa1197af769ff588f9",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/artifact.rs": "88d5734fd0987316de4e734516c2c348613db1cd1f6fa3e0236bdecfaa1dd192",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/bin/mncs-vm.rs": "2b5671d1e4f82f8dc9beec98b325c148eb185cac0c3af2e7f915c7c62b9e27fa",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/call_resolution_policy.rs": "c468fbaf824eb792ef7689f105aa7a5b8f3b4891ef800578f4f8a6a3bbbfb497",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/capability.rs": "ec626b6bff79e181fe16a4299f472f750419780a426c2ede8a962aa1d1c7203c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/debug.rs": "b1d121dcaeec93f2728837e6dab7f46af5e2dee5a33928dc202f032ed3e5fc48",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/engine.rs": "bbc1d02ee87ced6b9ada98f2a5048da659c000e7ec0edfe55937f472eeffe50c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/evidence.rs": "bb3789d3d9d3a6c2073b2922457fdd5957dcd3545669f9d2fff649333de818ea",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/harness.rs": "edda713b68bb6496af76ab1727a2091781e49041a5b5ab3b3d70682f932c2171",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/lib.rs": "25decea69d4aea3f4a7f769dea55f2f93b16056501e34c7b6a7a6a1f133ae24a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome.rs": "354f7ab1500d69d1bb02038735af183b8a3443a0e54e1b5acbc89ee09b725491",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome_policy.rs": "63be91853da2b674b2c48b2b6a792a98b1459be41191b37e1d953ba65857fa94",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/resource.rs": "63e4e953d4521220c283c0b708d87b2e3acff955d93935600943df6e27522782",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/session.rs": "fd591fbdad63cdea5df40528df4d40221d877a5d0af4d105595e40b11d5f1216",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/value.rs": "982a764bbfe60e4fa1a1027cfa996ad0d997e28851807aec5cb72c33e15a1ade"
+                },
+                "source_inputs_identity": "fd72157174bd3a7d450f51273966523b98059a0c04353f5eb6cf035efceab495",
+                "source_revisions": {
+                  "mncs-compiler": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                  "mncs-language": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                  "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                  "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77"
+                }
+              }
+            },
+            "capability_binding": "serve is effect-free; explicit provider bindings remain run/debug-owned",
+            "debug_cli_schema": "mncs.vm.debug-cli/1",
+            "debug_schema": "mncs.vm.debug/1",
+            "execution_request_schema": "0.1",
+            "modes": [
+              "run",
+              "batch",
+              "serve",
+              "debug"
+            ],
+            "schema_version": "mncs.vm.runtime-provider/1",
+            "session_schema": "mncs.vm.session/1",
+            "ssa_schemas": [
+              "0.5",
+              "0.6"
+            ],
+            "version": "0.1.0",
+            "vm_contract": "mncs.vm/0.1"
+          },
+          "schema_version": "mncs.vm.admission/1",
+          "status": "admitted"
+        },
+        "stderr": ""
+      }
+    },
+    "parse_unit_signatures_4_32": {
+      "deterministic_fresh_emissions": {
+        "byte_identical": true,
+        "artifact_bytes": 13851386,
+        "artifact_file_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+        "run1_emission": {
+          "status": "emitted",
+          "detail": {
+            "ok": true,
+            "error_code": 0,
+            "error_function": 0,
+            "error_block": 0,
+            "error_instruction": 0,
+            "callable": null,
+            "phase": 0,
+            "ssa_kind": 0,
+            "expected_type_kind": 0,
+            "observed_type_kind": 0,
+            "observed_nominal": null,
+            "source_start": 0,
+            "source_end": 0
+          },
+          "function_count": 365,
+          "record_type_count": 87,
+          "finite_type_count": 25,
+          "block_count": 4878,
+          "instruction_count": 17454,
+          "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+          "artifact_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+          "artifact_bytes": 13851386
+        },
+        "run2_emission": {
+          "status": "emitted",
+          "detail": {
+            "ok": true,
+            "error_code": 0,
+            "error_function": 0,
+            "error_block": 0,
+            "error_instruction": 0,
+            "callable": null,
+            "phase": 0,
+            "ssa_kind": 0,
+            "expected_type_kind": 0,
+            "observed_type_kind": 0,
+            "observed_nominal": null,
+            "source_start": 0,
+            "source_end": 0
+          },
+          "function_count": 365,
+          "record_type_count": 87,
+          "finite_type_count": 25,
+          "block_count": 4878,
+          "instruction_count": 17454,
+          "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+          "artifact_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+          "artifact_bytes": 13851386
+        },
+        "run1_host_peak_rss_bytes": 1097736192,
+        "run2_host_peak_rss_bytes": 1097543680
+      },
+      "canonical_vm_admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0,
+        "output": {
+          "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+          "runtime": {
+            "artifact_schema": "mncs.vm.artifact/1",
+            "build_origin": {
+              "identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e",
+              "receipt": {
+                "assurance": "local build observation; not independent attestation",
+                "build_configuration": {
+                  "cargo_home": null,
+                  "cargo_path": "/usr/bin/cargo",
+                  "cargo_version": "cargo 1.99.1 (5f94df478 2026-08-27) (Fedora 1.99.1-2.fc44)",
+                  "debug": "false",
+                  "encoded_rustflags": "",
+                  "features": {},
+                  "opt_level": "3",
+                  "profile": "release",
+                  "rustc_path": "rustc",
+                  "rustc_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Fedora 1.99.1-2.fc44)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 22.1.8",
+                  "rustflags": null,
+                  "target": "x86_64-unknown-linux-gnu",
+                  "toolchain_executables": {
+                    "cargo": {
+                      "configured_path": "/usr/bin/cargo",
+                      "resolved_path": "/usr/bin/cargo",
+                      "sha256": "c3c091d6338947cc6119e446893cf6fd62676cc5209c27b8df0ddb08ea86d3c3"
+                    },
+                    "rustc": {
+                      "configured_path": "rustc",
+                      "resolved_path": "/usr/bin/rustc",
+                      "sha256": "c4c74a89c2187582c8e774da3f00e403f497b5aa9a6f1369b1bc6c089762bf62"
+                    }
+                  }
+                },
+                "dependency_closure": [
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-vm",
+                    "repository": "mncs-vm",
+                    "revision": "da99dee282336c5acdc91359b14f477745c77f77",
+                    "source_input_count": 24,
+                    "source_inputs_identity": "bf260cb3aae37f4f1ca3552721b0c1a100efc0b7ad957e3266eb06560b487c3f"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-language",
+                    "repository": "mncs-language",
+                    "revision": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                    "source_input_count": 70,
+                    "source_inputs_identity": "8dd08ff5419fabcc27e08d2168928f30f280b9da834a7f0c3ff3d7bb45df36fa"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-compiler",
+                    "repository": "mncs-compiler",
+                    "revision": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "e7396894b68974055cab3d1a3bcd7afe09f2d1bb7f506845e3ce802ee7ce3d6a"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-stdlib",
+                    "repository": "mncs-stdlib",
+                    "revision": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "bc04c2cef8a455077353555ded97c56f67b8766f9c226daa65eac598a64faa54"
+                  }
+                ],
+                "dirty_content_identity": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                "dirty_input_count": 0,
+                "producer_kind": "canonical-mncs-vm",
+                "repository": "mncs-vm",
+                "schema_version": "mncs.vm-build-receipt/1",
+                "source_input_roots": [
+                  "/home/epi13/Documents/Projects/mncs-vm/src",
+                  "/home/epi13/Documents/Projects/mncs-vm/native",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/.cargo/config.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs"
+                ],
+                "source_inputs": {
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml": "e0a2a2359396e5405f8ca033a465c7e8f40cec51424c9774bdb6f3c7581025d4",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src/lib.rs": "84aca94ce2c2d7e75b6f5dca5d902079596a9a4a904355e32c6d7e53a09ddea3",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock": "5b5a36a3b47cf7bd219241f39083e88adfba6b3108cbd660699cdc11435bfb0d",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml": "032debfa0378f56034290f28bbe639f950e07a68b72d58418b9791290bdd4c16",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml": "49c35b50df1a8579d746d3573d02a4f8f8c4264c7ee86517772524cf8ee1b509",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11.rs": "6dfd32181d2d4186202fbb55590b552bad43c5773eddfb2d6224d18f93a80d8b",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11/native_ssa.rs": "5a8e2ec92e35c218914761cb9044eccc9872898ff6010c2fac33d31d526fb7c3",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/composite.rs": "257a4da7b9154e48fd505709a07552cc3bda1b546707443662584c6bcb6f6e76",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/cranelift_backend.rs": "790da95187f6186709ea38b53b388f40752c48b1d59b3fb18c4b4183191dccd8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/external.rs": "132feedf8fbe08f49f5426eb9ad81984739f8c72b04003dfa7a6741b4371f870",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lib.rs": "53dee3c56cb12cea88e377bdfd24fcbaec84edf5a8425308fa97e517d5a8b5e8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/llvm.rs": "41cf6426bf32483e49b0eca73c7bd18088f0f8345d3bbdf520a85ff10edabf73",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lower.rs": "d3d485dad6254bf14b9328870e37ca813c7cd1640ae437532ce16db060b203b4",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/matrix.rs": "9219adb599e3562ce8e90007e71ef0e18e1b5bd2eb2be80e93f149722e6954aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/native.rs": "ba620e0261482bfa3650379520ebc25e877d38d2614cfcdaba851a6f49a83982",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/promises.rs": "e780403f39954350c10bc1cd7ca6ceb93862e6b1834139f2347c6101b51f77c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/scalar.rs": "6a29dc1c5e0d4bbb2530f387abc06570ebc7629e5b6eec7e30e9e67809a9f5f0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/support.rs": "0a80f03fc1bffd5578aac2fe1e8f3388ae7c5aed0a34980ced7df2c7a54fca39",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/wasm.rs": "c116f86d4a61a38a43c3497089106837b0f0f6dbabeb04b4a76c913b8f3670be",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml": "02d35923e047b7551c007fc139e9d65cf2001f3f40108a7085f4aaf7ee3fad5e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/bundle.rs": "0b4afd00223e64445d00f2290759b44faef14b8a50ba1b43b7da33c00a223139",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/frontend.rs": "9adf10dfa8796edcf7f229a878ffbb7579d709b28478008f8640f5d1153d8377",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/inventory.rs": "f6aada06a0a16a303c41133d4193f8acadcec6e21d7f32e6d61792c65eb9a019",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/lib.rs": "ad3c4a6da501f7c695bef06c91b5760c99ce46a4297523884942427592836dc0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/proof_admission.rs": "adc44fe587ccc90fc5d27023601e7a9f7af6eed7eee3ca49f19d841283a796d6",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/resolution.rs": "59a19becba40ee76ff2d8d6aee1ae939c05847ebd8007b11ba1f9c297526ec0f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_map.rs": "f8a35f5dd1847857c8f888ee1c19c35e5dae42fa9a08272dbfa2051127c521e0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_parse_cache.rs": "29eccee42cf5b56d9778e21d412ea3ba066170ef6d1a01ba65d5137fe6643383",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml": "41c4403b88e8a4a6d4a29bafd7bb31d5d1078df2ed070bbbb3c253ca43a109fc",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/authority.rs": "8f374f2ebb4927cdceacf203479c0b8177ac1c6573bf3480d041a04a5291b4ce",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/bindings.rs": "aa9af4484b19fb9633a3977b5ce1f43bec74e81adf819b80930e2e8e90454ba8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/body.rs": "5e639636d703016f269b47a0e940096d1212f2c676b8cdfd374b14a56734be92",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/canonical.rs": "691037d83de76a378971bace208bd85b42dfee1abbce7883aa5c2352ef028f8c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/capability_gap.rs": "454604389c934788e49e70a66f3202e64d02eb0dada5d27d721f2838d296c549",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cfg.rs": "19fc0b2e0a9f06a4c3f3e376ba2973addc448f3bbe098f66768bc8fb54d01e42",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler.rs": "f8fb984fd50cbec85a941500c27a9cb4d41159d5530c0e5c50a19a24b43640c8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler_architecture.rs": "f72246f1a04e236a7fe43994c39027fc48262b40e8dab562a44702c1e16746c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/core.rs": "20e87972dac7c575494864caca4fa53f935844a8962b56bc075a3337382b9f95",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cost.rs": "3cdf93ad0f660848b4cc44817b4f5fd3782f7aea369d91cde320675ea7501f6d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/delta.rs": "d6744b39f442dd76565db0c0407270021ccde2cddd82a8f3faa3807f7218c14d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/evidence.rs": "4108394c40043a2b82b72f29edb266dd5f1e1e05c2bce9a64175bfc5550aea6a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/execution.rs": "e7f22910c5458d0d7c67579978337f01401aac12deb4dc0ebcf8b66fa9b1c01d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/experiment.rs": "537af3b4b4a5fc7ed03d5a223fdfe8134cdbb465d7b565bbf2967af00f66e9aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/fs_resource.rs": "b16c8da2951adb9d536c131fc341913a20ccb8312f03f54fe87faf0e10ecbbaf",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/generics.rs": "2534d7bdd5a3ca233d4ca4a3f233fd579ad3c5c5ca12124d426c337bdcafd19c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/graph.rs": "bd4ebfaa6d34ab4353dfaf41e8797758922311a58be52cbf455749ecc5d6d97d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/identity.rs": "133d738c483a6c55a78b4dec3e124d8a9277b92f24e1cba1717dbb2be46b9cfa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ir.rs": "71972f36f935ba416fa10052fa17168385b01f6de08533f17589cfbe001400fa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/lib.rs": "65c79492db7c533b2aab0a500ec156a4cf61c609a2a4503573032a4a637a820f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/machine_intent.rs": "8bade2451dcfb262805d9779cfc07ae5621bb6c8c00da1aa94178e26b3ae065a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/obligations.rs": "bb52843b98144039438d5f9a39b26c2cb53e4c4ed895762bd48bc22bb760cfa0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process.rs": "453f412434376f525d9f522b7509816428b535e32af8426f4b2d17f17a7490e7",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process_runtime.rs": "61fd703075fa711fa9bcafdc822bde33ba06cfe39a11d4de03686d79ed50ae41",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_dep.rs": "bda0df805f29c068c0d5dff8290ffea9fe29625ab3395f35c881ede933f458ad",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_kernel.rs": "dedcfb2e920632c3b287a4354b0075ed708c003f537e7547e17f7ff7a1a8f20e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_transport.rs": "0c6a2aa2daa940a0cb60a77acc7682a3f707f3f59ed8a23b6dc83e5ba1cc7274",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/provenance.rs": "8520c9e2f22fa95130d7444bef2a8b86e6c9f4185699c58829ad7d0eef00158c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/refinement.rs": "8903d1af63402571255b379ca5f5ac5e99126c4f09fe7ed809fccb971c86f078",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/representation.rs": "35286093187107a46957611ae3715de8bd6356860ca837d9bfd6ffbc112c2b86",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa.rs": "b792862b885757fe3ebcc94bb532b82fbdd77633e50e695fd8bfc13fa1e2a823",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa_execution.rs": "80f619468b65580258fbcf20a4b796f6adc1a762890a46057e14292fb0985434",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/structured.rs": "39be00138bfc95520d314f666291a0e8cfb5a3e6a20e0e62af58d8f7cbb13b0e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/termination.rs": "b7c286dc782c821645e0f23b4284912d7fecf9e062b079bfd3e95e9e0ee18f3e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/translation.rs": "141b55f93d4be65c2a06e56f032b684352d0ee495ec74a1fb5468f3bb02c7425",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/validation.rs": "16256308ceb9c8627eaba804ce61021d016aa055c13e34bf14d141eacaed3ac2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/value_contract.rs": "cd4e61db31c20c60b79b688b14ecccd0b041899d5a8f9eeff453ba3fb6045e4a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verification_facts.rs": "85b6161c32a88c56eb0782ddfe16435246efebea2a6bbeddf5fea8ca5ef30d4d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verifier.rs": "e3ccd43a1182397dd8d8f70177d527d71436561ed5bfff1aea0a816fa47892d8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml": "259dc254a116e0b42be0f2063f33b3b386da1bdd78fd708471458728c2d36e93",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/lib.rs": "62b6e61e29aac72737eec2f3f7f2a5bb17c3feee11a77f2299a8be1ece49b740",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/profile.rs": "951c6664e4200ff2031e5d5b4f576d86c0b2835de98ffcf99a7a642b071bc088",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/source.rs": "7356d99c32bd0fc7939f91914323f1cd779e0e92594af9e7e5ce144aaf3abda7",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs": "02a87c9fe7c8c5f8eee9e177c5090bd57614ad6a05b84a339ebab5b90f61f337",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs": "9d09428028957c4f1002bc86024e6c2b672ec895241484a3e0a46183f3f865a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock": "ae02667ba99ced0c3a6a763cfa6b30bf97b87ff8be4cb0ed02cfb2c4aad69e1d",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml": "50e085047a84c98811814188506efa3932bbe72e8e5953d4cb713c0e27c3047b",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs": "b00fa8dd478074fdac13db3132723d0bc6e5529a56583707e6f77b9bff0173a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs": "f2660a1c88f09d06b90323f0cec961f460281234db898e35423576bfeb3011dc",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.artifact.json": "e20108cd99e66961c9eaf41550ea9b0ed4e5d40dfe128316fb77a3493661eb96",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.mncs": "9ba7929e0428c459d327341466a42eb3f438ccd3a52debf6632c62544b8dcfb9",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.artifact.json": "f1480eee0afc7a45962966a073981fe4dfa9a213d23efd642cc764dcd21c023e",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.mncs": "6cce824d95156f8a10ccf300237cfc744ac48c4426aa28bf0e869ad296e6a95a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admission_policy.rs": "0fcc588d6122b497d50f141958b9b0f01d59b9d0fb73489f6f1186c523609504",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admit.rs": "82d57310f558f5d1d4c79af2da3abc9aa1c3c5c34342d7fa1197af769ff588f9",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/artifact.rs": "88d5734fd0987316de4e734516c2c348613db1cd1f6fa3e0236bdecfaa1dd192",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/bin/mncs-vm.rs": "2b5671d1e4f82f8dc9beec98b325c148eb185cac0c3af2e7f915c7c62b9e27fa",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/call_resolution_policy.rs": "c468fbaf824eb792ef7689f105aa7a5b8f3b4891ef800578f4f8a6a3bbbfb497",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/capability.rs": "ec626b6bff79e181fe16a4299f472f750419780a426c2ede8a962aa1d1c7203c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/debug.rs": "b1d121dcaeec93f2728837e6dab7f46af5e2dee5a33928dc202f032ed3e5fc48",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/engine.rs": "bbc1d02ee87ced6b9ada98f2a5048da659c000e7ec0edfe55937f472eeffe50c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/evidence.rs": "bb3789d3d9d3a6c2073b2922457fdd5957dcd3545669f9d2fff649333de818ea",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/harness.rs": "edda713b68bb6496af76ab1727a2091781e49041a5b5ab3b3d70682f932c2171",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/lib.rs": "25decea69d4aea3f4a7f769dea55f2f93b16056501e34c7b6a7a6a1f133ae24a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome.rs": "354f7ab1500d69d1bb02038735af183b8a3443a0e54e1b5acbc89ee09b725491",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome_policy.rs": "63be91853da2b674b2c48b2b6a792a98b1459be41191b37e1d953ba65857fa94",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/resource.rs": "63e4e953d4521220c283c0b708d87b2e3acff955d93935600943df6e27522782",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/session.rs": "fd591fbdad63cdea5df40528df4d40221d877a5d0af4d105595e40b11d5f1216",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/value.rs": "982a764bbfe60e4fa1a1027cfa996ad0d997e28851807aec5cb72c33e15a1ade"
+                },
+                "source_inputs_identity": "fd72157174bd3a7d450f51273966523b98059a0c04353f5eb6cf035efceab495",
+                "source_revisions": {
+                  "mncs-compiler": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                  "mncs-language": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                  "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                  "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77"
+                }
+              }
+            },
+            "capability_binding": "serve is effect-free; explicit provider bindings remain run/debug-owned",
+            "debug_cli_schema": "mncs.vm.debug-cli/1",
+            "debug_schema": "mncs.vm.debug/1",
+            "execution_request_schema": "0.1",
+            "modes": [
+              "run",
+              "batch",
+              "serve",
+              "debug"
+            ],
+            "schema_version": "mncs.vm.runtime-provider/1",
+            "session_schema": "mncs.vm.session/1",
+            "ssa_schemas": [
+              "0.5",
+              "0.6"
+            ],
+            "version": "0.1.0",
+            "vm_contract": "mncs.vm/0.1"
+          },
+          "schema_version": "mncs.vm.admission/1",
+          "status": "admitted"
+        },
+        "stderr": ""
+      },
+      "stage0_differential_executions": {
+        "status": "returned",
+        "cases": {
+          "valid_unit": {
+            "stride": 32,
+            "returned": {
+              "cursor": 122,
+              "enums": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "cursor": 85,
+                    "decl_end": 85,
+                    "decl_start": 59,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "name_end": 65,
+                    "name_start": 64,
+                    "ok": true,
+                    "variants": {
+                      "$v": 1,
+                      "$p": {
+                        "head": {
+                          "fields": {
+                            "$v": 0,
+                            "$p": {}
+                          },
+                          "name_end": 69,
+                          "name_start": 68
+                        },
+                        "tail": {
+                          "$v": 1,
+                          "$p": {
+                            "head": {
+                              "fields": {
+                                "$v": 1,
+                                "$p": {
+                                  "head": {
+                                    "name_end": 76,
+                                    "name_start": 75,
+                                    "type_end": 81,
+                                    "type_kind": 1,
+                                    "type_start": 78
+                                  },
+                                  "tail": {
+                                    "$v": 0,
+                                    "$p": {}
+                                  }
+                                }
+                              },
+                              "name_end": 72,
+                              "name_start": 71
+                            },
+                            "tail": {
+                              "$v": 0,
+                              "$p": {}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "err_end": 0,
+              "err_start": 0,
+              "fns": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "body": {
+                      "body": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "has_ret": false,
+                      "ret": {
+                        "$v": 0,
+                        "$p": {
+                          "start": 88,
+                          "end": 88
+                        }
+                      }
+                    },
+                    "cursor": 122,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fn_end": 122,
+                    "fn_start": 86,
+                    "ok": true,
+                    "sig": {
+                      "capabilities": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "contracts": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "effects": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "generics": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "name_end": 90,
+                      "name_start": 89,
+                      "params": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 92,
+                            "name_start": 91,
+                            "type_end": 95,
+                            "type_kind": 5,
+                            "type_start": 94
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      },
+                      "results": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 102,
+                            "name_start": 101,
+                            "type_end": 105,
+                            "type_kind": 5,
+                            "type_start": 104
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "header": {
+                "code": 0,
+                "end": 0,
+                "module_end": 19,
+                "module_start": 18,
+                "next_offset": 20,
+                "start": 0,
+                "state": 8,
+                "version_end": 9,
+                "version_start": 5
+              },
+              "ok": true,
+              "records": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "cursor": 58,
+                    "decl_end": 58,
+                    "decl_start": 35,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fields": {
+                      "$v": 1,
+                      "$p": {
+                        "head": {
+                          "name_end": 51,
+                          "name_start": 46,
+                          "type_end": 56,
+                          "type_kind": 1,
+                          "type_start": 53
+                        },
+                        "tail": {
+                          "$v": 0,
+                          "$p": {}
+                        }
+                      }
+                    },
+                    "name_end": 43,
+                    "name_start": 42,
+                    "ok": true
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "uses": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "alias_end": 33,
+                    "alias_start": 32,
+                    "cursor": 34,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "has_alias": true,
+                    "module_end": 28,
+                    "module_start": 25,
+                    "ok": true
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              }
+            },
+            "matches_stage0": true,
+            "steps": 71415,
+            "max_memory_cells": 29426
+          },
+          "qualified_imported_type": {
+            "stride": 32,
+            "returned": {
+              "cursor": 119,
+              "enums": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "cursor": 80,
+                    "decl_end": 80,
+                    "decl_start": 57,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "name_end": 63,
+                    "name_start": 62,
+                    "ok": true,
+                    "variants": {
+                      "$v": 1,
+                      "$p": {
+                        "head": {
+                          "fields": {
+                            "$v": 1,
+                            "$p": {
+                              "head": {
+                                "name_end": 71,
+                                "name_start": 70,
+                                "type_end": 76,
+                                "type_kind": 6,
+                                "type_start": 73
+                              },
+                              "tail": {
+                                "$v": 0,
+                                "$p": {}
+                              }
+                            }
+                          },
+                          "name_end": 67,
+                          "name_start": 66
+                        },
+                        "tail": {
+                          "$v": 0,
+                          "$p": {}
+                        }
+                      }
+                    }
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "err_end": 0,
+              "err_start": 0,
+              "fns": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "body": {
+                      "body": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "has_ret": false,
+                      "ret": {
+                        "$v": 0,
+                        "$p": {
+                          "start": 83,
+                          "end": 83
+                        }
+                      }
+                    },
+                    "cursor": 119,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fn_end": 119,
+                    "fn_start": 81,
+                    "ok": true,
+                    "sig": {
+                      "capabilities": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "contracts": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "effects": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "generics": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "name_end": 85,
+                      "name_start": 84,
+                      "params": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 87,
+                            "name_start": 86,
+                            "type_end": 94,
+                            "type_kind": 6,
+                            "type_start": 89
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      },
+                      "results": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 101,
+                            "name_start": 100,
+                            "type_end": 104,
+                            "type_kind": 5,
+                            "type_start": 103
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "header": {
+                "code": 0,
+                "end": 0,
+                "module_end": 19,
+                "module_start": 18,
+                "next_offset": 20,
+                "start": 0,
+                "state": 8,
+                "version_end": 9,
+                "version_start": 5
+              },
+              "ok": true,
+              "records": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "cursor": 56,
+                    "decl_end": 56,
+                    "decl_start": 35,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fields": {
+                      "$v": 1,
+                      "$p": {
+                        "head": {
+                          "name_end": 47,
+                          "name_start": 46,
+                          "type_end": 54,
+                          "type_kind": 6,
+                          "type_start": 49
+                        },
+                        "tail": {
+                          "$v": 0,
+                          "$p": {}
+                        }
+                      }
+                    },
+                    "name_end": 43,
+                    "name_start": 42,
+                    "ok": true
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "uses": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "alias_end": 33,
+                    "alias_start": 32,
+                    "cursor": 34,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "has_alias": true,
+                    "module_end": 28,
+                    "module_start": 25,
+                    "ok": true
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              }
+            },
+            "matches_stage0": true,
+            "steps": 70988,
+            "max_memory_cells": 26789
+          },
+          "page_split_inside_decl": {
+            "stride": 23,
+            "returned": {
+              "cursor": 85,
+              "enums": {
+                "$v": 0,
+                "$p": {}
+              },
+              "err_end": 0,
+              "err_start": 0,
+              "fns": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "body": {
+                      "body": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "has_ret": false,
+                      "ret": {
+                        "$v": 0,
+                        "$p": {
+                          "start": 48,
+                          "end": 48
+                        }
+                      }
+                    },
+                    "cursor": 85,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fn_end": 85,
+                    "fn_start": 46,
+                    "ok": true,
+                    "sig": {
+                      "capabilities": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "contracts": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "effects": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "generics": {
+                        "$v": 0,
+                        "$p": {}
+                      },
+                      "name_end": 51,
+                      "name_start": 49,
+                      "params": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 53,
+                            "name_start": 52,
+                            "type_end": 58,
+                            "type_kind": 5,
+                            "type_start": 55
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      },
+                      "results": {
+                        "$v": 1,
+                        "$p": {
+                          "head": {
+                            "name_end": 65,
+                            "name_start": 64,
+                            "type_end": 70,
+                            "type_kind": 5,
+                            "type_start": 67
+                          },
+                          "tail": {
+                            "$v": 0,
+                            "$p": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "header": {
+                "code": 0,
+                "end": 0,
+                "module_end": 19,
+                "module_start": 18,
+                "next_offset": 20,
+                "start": 0,
+                "state": 8,
+                "version_end": 9,
+                "version_start": 5
+              },
+              "ok": true,
+              "records": {
+                "$v": 1,
+                "$p": {
+                  "head": {
+                    "cursor": 45,
+                    "decl_end": 45,
+                    "decl_start": 21,
+                    "err_end": 0,
+                    "err_start": 0,
+                    "fields": {
+                      "$v": 1,
+                      "$p": {
+                        "head": {
+                          "name_end": 38,
+                          "name_start": 34,
+                          "type_end": 43,
+                          "type_kind": 1,
+                          "type_start": 40
+                        },
+                        "tail": {
+                          "$v": 0,
+                          "$p": {}
+                        }
+                      }
+                    },
+                    "name_end": 31,
+                    "name_start": 28,
+                    "ok": true
+                  },
+                  "tail": {
+                    "$v": 0,
+                    "$p": {}
+                  }
+                }
+              },
+              "uses": {
+                "$v": 0,
+                "$p": {}
+              }
+            },
+            "matches_stage0": true,
+            "steps": 49835,
+            "max_memory_cells": 22405
+          },
+          "malformed_declaration": {
+            "stride": 32,
+            "returned": {
+              "cursor": 20,
+              "enums": {
+                "$v": 0,
+                "$p": {}
+              },
+              "err_end": 30,
+              "err_start": 29,
+              "fns": {
+                "$v": 0,
+                "$p": {}
+              },
+              "header": {
+                "code": 0,
+                "end": 0,
+                "module_end": 19,
+                "module_start": 18,
+                "next_offset": 20,
+                "start": 0,
+                "state": 8,
+                "version_end": 9,
+                "version_start": 5
+              },
+              "ok": false,
+              "records": {
+                "$v": 0,
+                "$p": {}
+              },
+              "uses": {
+                "$v": 0,
+                "$p": {}
+              }
+            },
+            "matches_stage0": true,
+            "steps": 13447,
+            "max_memory_cells": 13160
+          },
+          "malformed_split_decl": {
+            "stride": 15,
+            "returned": {
+              "cursor": 20,
+              "enums": {
+                "$v": 0,
+                "$p": {}
+              },
+              "err_end": 38,
+              "err_start": 37,
+              "fns": {
+                "$v": 0,
+                "$p": {}
+              },
+              "header": {
+                "code": 0,
+                "end": 0,
+                "module_end": 19,
+                "module_start": 18,
+                "next_offset": 20,
+                "start": 0,
+                "state": 8,
+                "version_end": 9,
+                "version_start": 5
+              },
+              "ok": false,
+              "records": {
+                "$v": 0,
+                "$p": {}
+              },
+              "uses": {
+                "$v": 0,
+                "$p": {}
+              }
+            },
+            "matches_stage0": true,
+            "steps": 16701,
+            "max_memory_cells": 11384
+          }
+        },
+        "vm_peak_rss_bytes": 114491392,
+        "max_memory_cells": 29426
+      },
+      "all_5_cases_match_locked_stage0": false
+    },
+    "parse_use_4_32_regression": {
+      "probe_status": "returned",
+      "emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 46,
+        "record_type_count": 9,
+        "finite_type_count": 0,
+        "block_count": 1111,
+        "instruction_count": 6397,
+        "artifact_id": "sha256:793cfcf689778cc1e66d02e6c07d1e22ed993f3bf814faf909d73a49ef7105ed",
+        "artifact_sha256": "53a4647290e4c648eab46936805b05ae5721ba635741270c65feacd9044f6c85",
+        "artifact_bytes": 4465768
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0,
+        "output": {
+          "artifact_id": "sha256:793cfcf689778cc1e66d02e6c07d1e22ed993f3bf814faf909d73a49ef7105ed",
+          "runtime": {
+            "artifact_schema": "mncs.vm.artifact/1",
+            "build_origin": {
+              "identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e",
+              "receipt": {
+                "assurance": "local build observation; not independent attestation",
+                "build_configuration": {
+                  "cargo_home": null,
+                  "cargo_path": "/usr/bin/cargo",
+                  "cargo_version": "cargo 1.99.1 (5f94df478 2026-08-27) (Fedora 1.99.1-2.fc44)",
+                  "debug": "false",
+                  "encoded_rustflags": "",
+                  "features": {},
+                  "opt_level": "3",
+                  "profile": "release",
+                  "rustc_path": "rustc",
+                  "rustc_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Fedora 1.99.1-2.fc44)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 22.1.8",
+                  "rustflags": null,
+                  "target": "x86_64-unknown-linux-gnu",
+                  "toolchain_executables": {
+                    "cargo": {
+                      "configured_path": "/usr/bin/cargo",
+                      "resolved_path": "/usr/bin/cargo",
+                      "sha256": "c3c091d6338947cc6119e446893cf6fd62676cc5209c27b8df0ddb08ea86d3c3"
+                    },
+                    "rustc": {
+                      "configured_path": "rustc",
+                      "resolved_path": "/usr/bin/rustc",
+                      "sha256": "c4c74a89c2187582c8e774da3f00e403f497b5aa9a6f1369b1bc6c089762bf62"
+                    }
+                  }
+                },
+                "dependency_closure": [
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-vm",
+                    "repository": "mncs-vm",
+                    "revision": "da99dee282336c5acdc91359b14f477745c77f77",
+                    "source_input_count": 24,
+                    "source_inputs_identity": "bf260cb3aae37f4f1ca3552721b0c1a100efc0b7ad957e3266eb06560b487c3f"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-language",
+                    "repository": "mncs-language",
+                    "revision": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                    "source_input_count": 70,
+                    "source_inputs_identity": "8dd08ff5419fabcc27e08d2168928f30f280b9da834a7f0c3ff3d7bb45df36fa"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-compiler",
+                    "repository": "mncs-compiler",
+                    "revision": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "e7396894b68974055cab3d1a3bcd7afe09f2d1bb7f506845e3ce802ee7ce3d6a"
+                  },
+                  {
+                    "checkout": "/home/epi13/Documents/Projects/mncs-stdlib",
+                    "repository": "mncs-stdlib",
+                    "revision": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                    "source_input_count": 2,
+                    "source_inputs_identity": "bc04c2cef8a455077353555ded97c56f67b8766f9c226daa65eac598a64faa54"
+                  }
+                ],
+                "dirty_content_identity": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                "dirty_input_count": 0,
+                "producer_kind": "canonical-mncs-vm",
+                "repository": "mncs-vm",
+                "schema_version": "mncs.vm-build-receipt/1",
+                "source_input_roots": [
+                  "/home/epi13/Documents/Projects/mncs-vm/src",
+                  "/home/epi13/Documents/Projects/mncs-vm/native",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs",
+                  "/home/epi13/Documents/Projects/mncs-vm/.cargo/config.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs"
+                ],
+                "source_inputs": {
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/Cargo.toml": "e0a2a2359396e5405f8ca033a465c7e8f40cec51424c9774bdb6f3c7581025d4",
+                  "/home/epi13/Documents/Projects/mncs-compiler/tools/vm-artifact-codec/src/lib.rs": "84aca94ce2c2d7e75b6f5dca5d902079596a9a4a904355e32c6d7e53a09ddea3",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.lock": "5b5a36a3b47cf7bd219241f39083e88adfba6b3108cbd660699cdc11435bfb0d",
+                  "/home/epi13/Documents/Projects/mncs-language/Cargo.toml": "032debfa0378f56034290f28bbe639f950e07a68b72d58418b9791290bdd4c16",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/Cargo.toml": "49c35b50df1a8579d746d3573d02a4f8f8c4264c7ee86517772524cf8ee1b509",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11.rs": "6dfd32181d2d4186202fbb55590b552bad43c5773eddfb2d6224d18f93a80d8b",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/c11/native_ssa.rs": "5a8e2ec92e35c218914761cb9044eccc9872898ff6010c2fac33d31d526fb7c3",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/composite.rs": "257a4da7b9154e48fd505709a07552cc3bda1b546707443662584c6bcb6f6e76",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/cranelift_backend.rs": "790da95187f6186709ea38b53b388f40752c48b1d59b3fb18c4b4183191dccd8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/external.rs": "132feedf8fbe08f49f5426eb9ad81984739f8c72b04003dfa7a6741b4371f870",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lib.rs": "53dee3c56cb12cea88e377bdfd24fcbaec84edf5a8425308fa97e517d5a8b5e8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/llvm.rs": "41cf6426bf32483e49b0eca73c7bd18088f0f8345d3bbdf520a85ff10edabf73",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/lower.rs": "d3d485dad6254bf14b9328870e37ca813c7cd1640ae437532ce16db060b203b4",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/matrix.rs": "9219adb599e3562ce8e90007e71ef0e18e1b5bd2eb2be80e93f149722e6954aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/native.rs": "ba620e0261482bfa3650379520ebc25e877d38d2614cfcdaba851a6f49a83982",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/promises.rs": "e780403f39954350c10bc1cd7ca6ceb93862e6b1834139f2347c6101b51f77c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/scalar.rs": "6a29dc1c5e0d4bbb2530f387abc06570ebc7629e5b6eec7e30e9e67809a9f5f0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/support.rs": "0a80f03fc1bffd5578aac2fe1e8f3388ae7c5aed0a34980ced7df2c7a54fca39",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-codegen/src/wasm.rs": "c116f86d4a61a38a43c3497089106837b0f0f6dbabeb04b4a76c913b8f3670be",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/Cargo.toml": "02d35923e047b7551c007fc139e9d65cf2001f3f40108a7085f4aaf7ee3fad5e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/bundle.rs": "0b4afd00223e64445d00f2290759b44faef14b8a50ba1b43b7da33c00a223139",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/frontend.rs": "9adf10dfa8796edcf7f229a878ffbb7579d709b28478008f8640f5d1153d8377",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/inventory.rs": "f6aada06a0a16a303c41133d4193f8acadcec6e21d7f32e6d61792c65eb9a019",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/lib.rs": "ad3c4a6da501f7c695bef06c91b5760c99ce46a4297523884942427592836dc0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/proof_admission.rs": "adc44fe587ccc90fc5d27023601e7a9f7af6eed7eee3ca49f19d841283a796d6",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/resolution.rs": "59a19becba40ee76ff2d8d6aee1ae939c05847ebd8007b11ba1f9c297526ec0f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_map.rs": "f8a35f5dd1847857c8f888ee1c19c35e5dae42fa9a08272dbfa2051127c521e0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_parse_cache.rs": "29eccee42cf5b56d9778e21d412ea3ba066170ef6d1a01ba65d5137fe6643383",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/Cargo.toml": "41c4403b88e8a4a6d4a29bafd7bb31d5d1078df2ed070bbbb3c253ca43a109fc",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/authority.rs": "8f374f2ebb4927cdceacf203479c0b8177ac1c6573bf3480d041a04a5291b4ce",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/bindings.rs": "aa9af4484b19fb9633a3977b5ce1f43bec74e81adf819b80930e2e8e90454ba8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/body.rs": "5e639636d703016f269b47a0e940096d1212f2c676b8cdfd374b14a56734be92",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/canonical.rs": "691037d83de76a378971bace208bd85b42dfee1abbce7883aa5c2352ef028f8c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/capability_gap.rs": "454604389c934788e49e70a66f3202e64d02eb0dada5d27d721f2838d296c549",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cfg.rs": "19fc0b2e0a9f06a4c3f3e376ba2973addc448f3bbe098f66768bc8fb54d01e42",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler.rs": "f8fb984fd50cbec85a941500c27a9cb4d41159d5530c0e5c50a19a24b43640c8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/compiler_architecture.rs": "f72246f1a04e236a7fe43994c39027fc48262b40e8dab562a44702c1e16746c2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/core.rs": "20e87972dac7c575494864caca4fa53f935844a8962b56bc075a3337382b9f95",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/cost.rs": "3cdf93ad0f660848b4cc44817b4f5fd3782f7aea369d91cde320675ea7501f6d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/delta.rs": "d6744b39f442dd76565db0c0407270021ccde2cddd82a8f3faa3807f7218c14d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/evidence.rs": "4108394c40043a2b82b72f29edb266dd5f1e1e05c2bce9a64175bfc5550aea6a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/execution.rs": "e7f22910c5458d0d7c67579978337f01401aac12deb4dc0ebcf8b66fa9b1c01d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/experiment.rs": "537af3b4b4a5fc7ed03d5a223fdfe8134cdbb465d7b565bbf2967af00f66e9aa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/fs_resource.rs": "b16c8da2951adb9d536c131fc341913a20ccb8312f03f54fe87faf0e10ecbbaf",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/generics.rs": "2534d7bdd5a3ca233d4ca4a3f233fd579ad3c5c5ca12124d426c337bdcafd19c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/graph.rs": "bd4ebfaa6d34ab4353dfaf41e8797758922311a58be52cbf455749ecc5d6d97d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/identity.rs": "133d738c483a6c55a78b4dec3e124d8a9277b92f24e1cba1717dbb2be46b9cfa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ir.rs": "71972f36f935ba416fa10052fa17168385b01f6de08533f17589cfbe001400fa",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/lib.rs": "65c79492db7c533b2aab0a500ec156a4cf61c609a2a4503573032a4a637a820f",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/machine_intent.rs": "8bade2451dcfb262805d9779cfc07ae5621bb6c8c00da1aa94178e26b3ae065a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/obligations.rs": "bb52843b98144039438d5f9a39b26c2cb53e4c4ed895762bd48bc22bb760cfa0",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process.rs": "453f412434376f525d9f522b7509816428b535e32af8426f4b2d17f17a7490e7",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/process_runtime.rs": "61fd703075fa711fa9bcafdc822bde33ba06cfe39a11d4de03686d79ed50ae41",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_dep.rs": "bda0df805f29c068c0d5dff8290ffea9fe29625ab3395f35c881ede933f458ad",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_kernel.rs": "dedcfb2e920632c3b287a4354b0075ed708c003f537e7547e17f7ff7a1a8f20e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/proof_transport.rs": "0c6a2aa2daa940a0cb60a77acc7682a3f707f3f59ed8a23b6dc83e5ba1cc7274",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/provenance.rs": "8520c9e2f22fa95130d7444bef2a8b86e6c9f4185699c58829ad7d0eef00158c",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/refinement.rs": "8903d1af63402571255b379ca5f5ac5e99126c4f09fe7ed809fccb971c86f078",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/representation.rs": "35286093187107a46957611ae3715de8bd6356860ca837d9bfd6ffbc112c2b86",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa.rs": "b792862b885757fe3ebcc94bb532b82fbdd77633e50e695fd8bfc13fa1e2a823",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa_execution.rs": "80f619468b65580258fbcf20a4b796f6adc1a762890a46057e14292fb0985434",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/structured.rs": "39be00138bfc95520d314f666291a0e8cfb5a3e6a20e0e62af58d8f7cbb13b0e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/termination.rs": "b7c286dc782c821645e0f23b4284912d7fecf9e062b079bfd3e95e9e0ee18f3e",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/translation.rs": "141b55f93d4be65c2a06e56f032b684352d0ee495ec74a1fb5468f3bb02c7425",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/validation.rs": "16256308ceb9c8627eaba804ce61021d016aa055c13e34bf14d141eacaed3ac2",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/value_contract.rs": "cd4e61db31c20c60b79b688b14ecccd0b041899d5a8f9eeff453ba3fb6045e4a",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verification_facts.rs": "85b6161c32a88c56eb0782ddfe16435246efebea2a6bbeddf5fea8ca5ef30d4d",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verifier.rs": "e3ccd43a1182397dd8d8f70177d527d71436561ed5bfff1aea0a816fa47892d8",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/Cargo.toml": "259dc254a116e0b42be0f2063f33b3b386da1bdd78fd708471458728c2d36e93",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/lib.rs": "62b6e61e29aac72737eec2f3f7f2a5bb17c3feee11a77f2299a8be1ece49b740",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/profile.rs": "951c6664e4200ff2031e5d5b4f576d86c0b2835de98ffcf99a7a642b071bc088",
+                  "/home/epi13/Documents/Projects/mncs-language/crates/mncs-syntax/src/source.rs": "7356d99c32bd0fc7939f91914323f1cd779e0e92594af9e7e5ce144aaf3abda7",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/core/bytes.mncs": "02a87c9fe7c8c5f8eee9e177c5090bd57614ad6a05b84a339ebab5b90f61f337",
+                  "/home/epi13/Documents/Projects/mncs-stdlib/library/std/text_scan.mncs": "9d09428028957c4f1002bc86024e6c2b672ec895241484a3e0a46183f3f865a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.lock": "ae02667ba99ced0c3a6a763cfa6b30bf97b87ff8be4cb0ed02cfb2c4aad69e1d",
+                  "/home/epi13/Documents/Projects/mncs-vm/Cargo.toml": "50e085047a84c98811814188506efa3932bbe72e8e5953d4cb713c0e27c3047b",
+                  "/home/epi13/Documents/Projects/mncs-vm/build.rs": "b00fa8dd478074fdac13db3132723d0bc6e5529a56583707e6f77b9bff0173a9",
+                  "/home/epi13/Documents/Projects/mncs-vm/build_support.rs": "f2660a1c88f09d06b90323f0cec961f460281234db898e35423576bfeb3011dc",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.artifact.json": "e20108cd99e66961c9eaf41550ea9b0ed4e5d40dfe128316fb77a3493661eb96",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/batch_summary.mncs": "9ba7929e0428c459d327341466a42eb3f438ccd3a52debf6632c62544b8dcfb9",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.artifact.json": "f1480eee0afc7a45962966a073981fe4dfa9a213d23efd642cc764dcd21c023e",
+                  "/home/epi13/Documents/Projects/mncs-vm/native/mncs/vm/request_policy.mncs": "6cce824d95156f8a10ccf300237cfc744ac48c4426aa28bf0e869ad296e6a95a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admission_policy.rs": "0fcc588d6122b497d50f141958b9b0f01d59b9d0fb73489f6f1186c523609504",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/admit.rs": "82d57310f558f5d1d4c79af2da3abc9aa1c3c5c34342d7fa1197af769ff588f9",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/artifact.rs": "88d5734fd0987316de4e734516c2c348613db1cd1f6fa3e0236bdecfaa1dd192",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/bin/mncs-vm.rs": "2b5671d1e4f82f8dc9beec98b325c148eb185cac0c3af2e7f915c7c62b9e27fa",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/call_resolution_policy.rs": "c468fbaf824eb792ef7689f105aa7a5b8f3b4891ef800578f4f8a6a3bbbfb497",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/capability.rs": "ec626b6bff79e181fe16a4299f472f750419780a426c2ede8a962aa1d1c7203c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/debug.rs": "b1d121dcaeec93f2728837e6dab7f46af5e2dee5a33928dc202f032ed3e5fc48",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/engine.rs": "bbc1d02ee87ced6b9ada98f2a5048da659c000e7ec0edfe55937f472eeffe50c",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/evidence.rs": "bb3789d3d9d3a6c2073b2922457fdd5957dcd3545669f9d2fff649333de818ea",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/harness.rs": "edda713b68bb6496af76ab1727a2091781e49041a5b5ab3b3d70682f932c2171",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/lib.rs": "25decea69d4aea3f4a7f769dea55f2f93b16056501e34c7b6a7a6a1f133ae24a",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome.rs": "354f7ab1500d69d1bb02038735af183b8a3443a0e54e1b5acbc89ee09b725491",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/outcome_policy.rs": "63be91853da2b674b2c48b2b6a792a98b1459be41191b37e1d953ba65857fa94",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/resource.rs": "63e4e953d4521220c283c0b708d87b2e3acff955d93935600943df6e27522782",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/session.rs": "fd591fbdad63cdea5df40528df4d40221d877a5d0af4d105595e40b11d5f1216",
+                  "/home/epi13/Documents/Projects/mncs-vm/src/value.rs": "982a764bbfe60e4fa1a1027cfa996ad0d997e28851807aec5cb72c33e15a1ade"
+                },
+                "source_inputs_identity": "fd72157174bd3a7d450f51273966523b98059a0c04353f5eb6cf035efceab495",
+                "source_revisions": {
+                  "mncs-compiler": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+                  "mncs-language": "ce49235d4d9ddfeb5afbbe958fc2c62180bf9bee",
+                  "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+                  "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77"
+                }
+              }
+            },
+            "capability_binding": "serve is effect-free; explicit provider bindings remain run/debug-owned",
+            "debug_cli_schema": "mncs.vm.debug-cli/1",
+            "debug_schema": "mncs.vm.debug/1",
+            "execution_request_schema": "0.1",
+            "modes": [
+              "run",
+              "batch",
+              "serve",
+              "debug"
+            ],
+            "schema_version": "mncs.vm.runtime-provider/1",
+            "session_schema": "mncs.vm.session/1",
+            "ssa_schemas": [
+              "0.5",
+              "0.6"
+            ],
+            "version": "0.1.0",
+            "vm_contract": "mncs.vm/0.1"
+          },
+          "schema_version": "mncs.vm.admission/1",
+          "status": "admitted"
+        },
+        "stderr": ""
+      },
+      "execution": {
+        "status": "returned",
+        "cases": {
+          "bare": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 9,
+              "alias_start": 9,
+              "cursor": 10,
+              "err_end": 0,
+              "err_start": 0,
+              "has_alias": false,
+              "module_end": 9,
+              "module_start": 4,
+              "ok": true
+            },
+            "matches_stage0": true,
+            "steps": 3176,
+            "max_memory_cells": 6360
+          },
+          "aliased": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 27,
+              "alias_start": 23,
+              "cursor": 28,
+              "err_end": 0,
+              "err_start": 0,
+              "has_alias": true,
+              "module_end": 19,
+              "module_start": 4,
+              "ok": true
+            },
+            "matches_stage0": true,
+            "steps": 8033,
+            "max_memory_cells": 10117
+          },
+          "trivia": {
+            "stride": 16,
+            "returned": {
+              "alias_end": 42,
+              "alias_start": 39,
+              "cursor": 44,
+              "err_end": 0,
+              "err_start": 0,
+              "has_alias": true,
+              "module_end": 29,
+              "module_start": 16,
+              "ok": true
+            },
+            "matches_stage0": true,
+            "steps": 13610,
+            "max_memory_cells": 10290
+          },
+          "split_name": {
+            "stride": 9,
+            "returned": {
+              "alias_end": 26,
+              "alias_start": 21,
+              "cursor": 27,
+              "err_end": 0,
+              "err_start": 0,
+              "has_alias": true,
+              "module_end": 17,
+              "module_start": 4,
+              "ok": true
+            },
+            "matches_stage0": true,
+            "steps": 8049,
+            "max_memory_cells": 9019
+          },
+          "same_input_other_layout": {
+            "stride": 16,
+            "returned": {
+              "alias_end": 26,
+              "alias_start": 21,
+              "cursor": 27,
+              "err_end": 0,
+              "err_start": 0,
+              "has_alias": true,
+              "module_end": 17,
+              "module_start": 4,
+              "ok": true
+            },
+            "matches_stage0": true,
+            "steps": 7908,
+            "max_memory_cells": 9539
+          },
+          "bad_first_segment": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 5,
+              "err_start": 4,
+              "has_alias": false,
+              "module_end": 3,
+              "module_start": 3,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 893,
+            "max_memory_cells": 3590
+          },
+          "bad_dotted_segment": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 10,
+              "err_start": 9,
+              "has_alias": false,
+              "module_end": 3,
+              "module_start": 3,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 2481,
+            "max_memory_cells": 5877
+          },
+          "double_dot_token": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 9,
+              "err_start": 7,
+              "has_alias": false,
+              "module_end": 7,
+              "module_start": 4,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 2327,
+            "max_memory_cells": 5714
+          },
+          "keyword_alias": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 15,
+              "err_start": 11,
+              "has_alias": false,
+              "module_end": 7,
+              "module_start": 4,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 4910,
+            "max_memory_cells": 6871
+          },
+          "missing_alias": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 12,
+              "err_start": 11,
+              "has_alias": false,
+              "module_end": 7,
+              "module_start": 4,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 5362,
+            "max_memory_cells": 5551
+          },
+          "missing_semicolon": {
+            "stride": 32,
+            "returned": {
+              "alias_end": 0,
+              "alias_start": 0,
+              "cursor": 3,
+              "err_end": 17,
+              "err_start": 17,
+              "has_alias": false,
+              "module_end": 9,
+              "module_start": 4,
+              "ok": false
+            },
+            "matches_stage0": true,
+            "steps": 5406,
+            "max_memory_cells": 7740
+          }
+        },
+        "vm_peak_rss_bytes": 55279616,
+        "max_memory_cells": 10290
+      },
+      "host_peak_rss_bytes": 961400832
+    }
+  },
+  "step4_ambient_environment_and_outstanding_regressions": {
+    "environment_entry_verification": {
+      "session_id": "ses_ee16e38425a45ed4",
+      "initial_entry_verification": {
+        "budgeted": true,
+        "digest": "2dc8ee56210531ff65c759cf3060f1a301fc3995e9163ca797df116f442289c5",
+        "evidence": "sessions/ses_ee16e38425a45ed4/entry-context/verification-2dc8ee56210531ff65c759cf3060f1a301fc3995e9163ca797df116f442289c5.json",
+        "expanded_bytes": 1923,
+        "summary": {
+          "blockers": 0,
+          "current": 8,
+          "failed": 0,
+          "obligations": 64
+        }
+      },
+      "unchanged_reentry_verification": {
+        "budgeted": true,
+        "digest": "13a2f34f1ae31b7f58ea7bf4102655e37cbb2c61294e07c3dfa549cf5a9099df",
+        "evidence": "sessions/ses_ee16e38425a45ed4/entry-context/verification-13a2f34f1ae31b7f58ea7bf4102655e37cbb2c61294e07c3dfa549cf5a9099df.json",
+        "expanded_bytes": 1923,
+        "summary": {
+          "blockers": 0,
+          "current": 11,
+          "failed": 0,
+          "obligations": 64
+        }
+      },
+      "selected_callable_diagnosis": null
+    },
+    "outstanding_integration_regressions": {
+      "segment_lex_batch_from_4_32": {
+        "script": "tools/test_native_segment_lex_batch_vm_emit.py",
+        "status": "PASSED",
+        "artifact_id": "sha256:302ed1bbfa15f829f6e48dfee88be76f1a332e362afd0c86e956125b91ecec81",
+        "child_peak_rss_bytes": 4531691520,
+        "vm_peak_rss_bytes": 54882304,
+        "vm_max_memory_cells": 17606
+      },
+      "lexer_next_token_global_4_32": {
+        "script": "tools/test_native_lexer_next_token_global_vm_emit.py",
+        "status": "PASSED",
+        "report_keys": [
+          "status",
+          "provenance",
+          "checkpoint1_source_byte_at_global",
+          "lexer_next_token_global_4_32",
+          "focused_rejections",
+          "next_frontier_probes"
+        ]
+      }
+    }
+  }
+}

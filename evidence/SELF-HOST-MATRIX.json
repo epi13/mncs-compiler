@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "kind": "mncs-compiler-self-host-matrix",
-  "observed_at": "2026-10-19T06:20:30.964730+00:00",
+  "observed_at": "2026-11-22T23:55:00Z",
   "compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
   "compiler_head_role": "Historical compiler candidate/base identity captured at observed_at; it is not the current tested candidate or delivered main revision. Current tested-source and delivery identities are recorded in identity_ledger.",
   "compiler_branch": "campaign/qualified-finite-patterns-20261006",
@@ -10055,7 +10055,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-11-22T01:50:14.100929+00:00",
+  "evidence_updated_at": "2026-11-22T23:55:00Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -26671,6 +26671,192 @@
       },
       "reproduce_command": "python3 tools/test_native_decl_vm_emit.py parse_unit_signatures",
       "reduced_reproducer": "The same failure occurs with a decl.Unit identity function. In a minimal three-module fixture 1023 dummy functions admit the qualified header field and 1024 suppress it."
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "stage2_claimed": false,
+  "stage1_to_stage2_rebuild": "UNKNOWN",
+  "current_campaign_stage1_declaration_parse_unit_signatures_20261122": {
+    "date": "2026-11-22",
+    "evidence_artifact": "evidence/self-host-stage1-declaration-parse-unit-signatures-20261122.json",
+    "evidence_sha256": "17f02248b1e649a7cc041651233d2fc93ebe052cd305594045e7baa2d0555b3a",
+    "compiler_revision_base": "37a078c7a896608f09d7ebbd693c53ae5ec822b6",
+    "environment_revision": "d0882f8ac8ba61381d3417a1a18de1306bc5b17c",
+    "language_transport_revision": "8fa2e7113b86175f447751d5b49b10a91df37e10",
+    "language_service_revision": "82e134bf51f52a9a53d830ef02e1e3ee6daf2251",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "stage0_lock_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "locked_oracle_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+    "isolated_emitter_probe_sha256": "b53dd1da77f0b1c40fc8c7f8a26f0849351472283f8a2ea9c91c48ff8b0d53f4",
+    "compiler_sources_sha256": {
+      "src/compiler/decl.mncs": "d30fa9c43a72a85855d56d0b30f07359e26d64f0f83d5a02f1620dc8cfc4b8b0",
+      "src/compiler/project.mncs": "8ef7230cc45e8adf89dc7048c8db8e014c3d83f83a903221b0606da66e7207b1",
+      "src/compiler/ssa.mncs": "312c9c39e0d1b27a84ab89339beea8afad08513bc64d2247d97c70e5a88a0551",
+      "src/compiler/vm_emit.mncs": "f0eeec26ab8946d38b57bdfcdc5e72f1bbe35bb005e48581c0b83fd0470c462d"
+    },
+    "nominal_span_collection_repair": {
+      "previous_cap": 1024,
+      "supported_declaration_bound": 65536,
+      "boundary_reproduced": "1023 functions before records PASS; 1024 functions before records FAIL (dropped Unit.header: parser.Header at src/compiler/decl.mncs:116 span [7625, 7638])",
+      "verified_counts": [
+        1023,
+        1024,
+        1500
+      ],
+      "fail_closed_checks": [
+        "unresolved_qualified_reference",
+        "wrong_owner_qualified_reference"
+      ],
+      "ambient_native_suite": "tests/decl_nominal_span_collection_suite.mncs",
+      "ambient_native_obligation": "mncs-compiler.decl-nominal-span-collection-native",
+      "negative_tamper_verdicts": [
+        "PASS",
+        "FAIL",
+        "PASS"
+      ]
+    },
+    "parse_unit_signatures": {
+      "callable": "mncs.compiler.decl.v1::parse_unit_signatures<4,32>",
+      "specialization": [
+        4,
+        32
+      ],
+      "emitter_specialization": [
+        2048,
+        1024
+      ],
+      "emission": "emitted",
+      "admission": "admitted",
+      "execution": "executed",
+      "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+      "artifact_bytes_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+      "artifact_bytes": 13851386,
+      "byte_identical_across_two_fresh_runs": true,
+      "function_count": 365,
+      "record_type_count": 87,
+      "finite_type_count": 25,
+      "complete_locked_stage0_parity_cases": 5,
+      "locked_stage0_cases": [
+        "valid_unit",
+        "qualified_imported_type",
+        "page_split_inside_decl",
+        "malformed_declaration",
+        "malformed_split_decl"
+      ],
+      "run1_emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 365,
+        "record_type_count": 87,
+        "finite_type_count": 25,
+        "block_count": 4878,
+        "instruction_count": 17454,
+        "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+        "artifact_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+        "artifact_bytes": 13851386
+      },
+      "run2_emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 365,
+        "record_type_count": 87,
+        "finite_type_count": 25,
+        "block_count": 4878,
+        "instruction_count": 17454,
+        "artifact_id": "sha256:b1a0660917544dc94b2eb5c17f14d87d3e0b6129dd87432e5a6089649e0222ee",
+        "artifact_sha256": "bb49737a4be6b53c76cf032c95b89889115de6079f856fb2e8efd5b0c067f406",
+        "artifact_bytes": 13851386
+      },
+      "run1_host_peak_rss_bytes": 1097736192,
+      "run2_host_peak_rss_bytes": 1097543680
+    },
+    "parse_use_regression": {
+      "specialization": [
+        4,
+        32
+      ],
+      "emission": "emitted",
+      "admission": "admitted",
+      "execution": "executed",
+      "artifact_id": "sha256:793cfcf689778cc1e66d02e6c07d1e22ed993f3bf814faf909d73a49ef7105ed",
+      "complete_locked_stage0_parity_cases": 11,
+      "emission_summary": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 46,
+        "record_type_count": 9,
+        "finite_type_count": 0,
+        "block_count": 1111,
+        "instruction_count": 6397,
+        "artifact_id": "sha256:793cfcf689778cc1e66d02e6c07d1e22ed993f3bf814faf909d73a49ef7105ed",
+        "artifact_sha256": "53a4647290e4c648eab46936805b05ae5721ba635741270c65feacd9044f6c85",
+        "artifact_bytes": 4465768
+      },
+      "host_peak_rss_bytes": 961400832
+    },
+    "outstanding_integration_regressions": {
+      "segment_lex_batch_from_4_32": {
+        "status": "PASSED",
+        "artifact_id": "sha256:302ed1bbfa15f829f6e48dfee88be76f1a332e362afd0c86e956125b91ecec81",
+        "child_peak_rss_bytes": 4531691520,
+        "vm_peak_rss_bytes": 54882304,
+        "vm_max_memory_cells": 17606
+      },
+      "lexer_next_token_global_4_32": {
+        "status": "PASSED"
+      }
+    },
+    "ambient": {
+      "superseded_unit_lowering_refusal": true,
+      "selected_callable_status": "executed",
+      "selected_callable_last_completed_phase": "execution",
+      "unchanged_reentry_heavyweight_compile_launched": false,
+      "unchanged_reentry_provider_launches": 0,
+      "ambient_native_obligations_current": 11
     },
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,

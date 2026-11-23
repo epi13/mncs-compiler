@@ -497,7 +497,7 @@ def _run_focused_finite_rejections():
         assert r_proj["ok"] is False and r_proj["error_code"] == 7, r_proj
         out["wrong_payload_field_project"] = _emit_detail_summary(r_proj)
 
-        # 4. Wrong finite owner on FinitePayloadProject (kind 6) -> error_code 7
+        # 4. Wrong finite owner on FinitePayloadProject (kind 6) -> error_code 4 or 7 (phase 8, ssa_kind 6)
         mut_pown = copy.deepcopy(proj_ok_wire)
         k6_o = ntg_mod._find_all_insts_by_kind(mut_pown, 6)
         proj_emit._set_wire_field(k6_o[0][3], "nominal_identity", bad_nom)
@@ -506,7 +506,12 @@ def _run_focused_finite_rejections():
             proj_emit._build_compile_only_args(recs, sources) + [mut_pown, sem.integer(0), score_id],
             targs64,
         )
-        assert r_pown["ok"] is False and r_pown["error_code"] == 7, r_pown
+        assert (
+            r_pown["ok"] is False
+            and r_pown["error_code"] in (4, 7)
+            and r_pown["error_detail"]["phase"] == 8
+            and r_pown["error_detail"]["ssa_kind"] == 6
+        ), r_pown
         out["wrong_finite_owner_project"] = _emit_detail_summary(r_pown)
     finally:
         p.close()
@@ -722,11 +727,13 @@ def main():
                 assert got["next"] == exp["next"], (label, got["next"], exp["next"])
                 assert got["eof"] == exp["eof"], (label, got["eof"], exp["eof"])
                 assert got["count"] == exp["count"], (label, got["count"], exp["count"])
+                usage = (res.get("record") or {}).get("usage") or {}
                 case_results[label] = {
                     "count": got["count"],
                     "next": got["next"],
                     "eof": got["eof"],
-                    "steps": res["execution"].get("steps"),
+                    "steps": res["execution"].get("steps") or usage.get("steps"),
+                    "max_memory_cells": usage.get("max_memory_cells"),
                 }
 
             # Direct generic <4,32> dispatch
@@ -785,6 +792,9 @@ def main():
         "direct_generic_4_32_ok": True,
         "dual_layout_invariance_ok": True,
         "uncompiled_specs_refused": refused_specs,
+        "child_peak_rss_bytes": p.peak_rss_bytes,
+        "vm_peak_rss_bytes": vm_batch.peak_rss_bytes,
+        "vm_max_memory_cells": max((c.get("max_memory_cells") or 0) for c in case_results.values()),
         "cases": case_results,
     }
     print(f"    PASS: artifact_id={batch_art['artifact_id'][:24]}... ({len(case_results)}/{len(cases)} Stage-0 matches, deterministic, {batch_s}s)")

@@ -4478,19 +4478,55 @@ record NominalSpanWalk { fns: FnList, records: RecordList, enums: EnumList, acc:
 record NominalFieldWalk { fields: FieldList, acc: NominalTypeSpanList }
 record NominalVariantWalk { variants: VariantList, acc: NominalTypeSpanList }
 record NominalStmtWalk { rest: StmtList, acc: NominalTypeSpanList }
+fn nominal_type_span_list_empty(list: NominalTypeSpanList) -> (result: bool) {
+    return match list { NSNil => true, NSCons { head: h, tail: t } => false };
+}
+fn nominal_type_identity_list_empty(list: NominalTypeIdentityList) -> (result: bool) {
+    return match list { NINil => true, NICons { head: h, tail: t } => false };
+}
+fn nominal_span_walk_done(st: NominalSpanWalk) -> (result: bool) {
+    return declared_fn_list_empty(st.fns) && record_list_empty(st.records) && enum_list_empty(st.enums);
+}
+// Match the 64 * 1024 module-wide declaration walk bound (collect_call_walk,
+// bind_local_callable_identities) so large modules with >1,024 functions never
+// drop record, enum, or late-function nominal type spans, while short modules
+// return as soon as all three declaration lists are drained.
 fn collect_unit_nominal_type_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: Unit) -> (result: NominalTypeSpanList) {
-    iterate i up_to 1024 carrying st: NominalSpanWalk = NominalSpanWalk { fns: unit.fns, records: unit.records, enums: unit.enums, acc: NominalTypeSpanList.NSNil } {
+    let initial: NominalSpanWalk = NominalSpanWalk { fns: unit.fns, records: unit.records, enums: unit.enums, acc: NominalTypeSpanList.NSNil };
+    iterate chunk up_to 64 carrying st: NominalSpanWalk = initial {
+        if nominal_span_walk_done(st) { return collect_unit_nominal_type_spans_finish<P, N>(pages, stride, total, unit.fns, st.acc); }
+        next st = collect_unit_nominal_span_chunk<P, N>(pages, stride, total, st);
+    }
+    return collect_unit_nominal_type_spans_finish<P, N>(pages, stride, total, unit.fns, st.acc);
+}
+fn collect_unit_nominal_span_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: NominalSpanWalk) -> (result: NominalSpanWalk) {
+    iterate i up_to 1024 carrying st: NominalSpanWalk = initial {
+        if nominal_span_walk_done(st) { return st; }
         next st = collect_unit_nominal_span_step<P, N>(pages, stride, total, st);
     }
-    let walked: CallWalk = collect_call_walk<P, N>(pages, stride, total, unit.fns);
+    return st;
+}
+fn collect_unit_nominal_type_spans_finish<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: FnList, decl_spans: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
+    let walked: CallWalk = collect_call_walk<P, N>(pages, stride, total, fns);
     let patterns: NominalTypeSpanList = finite_pattern_nominal_spans<P, N>(pages, stride, total, walked.pattern_qualifiers);
     let constructions: NominalTypeSpanList = expression_nominal_type_spans<P, N>(pages, stride, total, walked.nominal_references);
-    return append_nominal_type_spans(patterns, append_nominal_type_spans(constructions, st.acc));
+    return append_nominal_type_spans(patterns, append_nominal_type_spans(constructions, decl_spans));
 }
 record NominalExpressionSpanWalk { rest: CallSiteList, acc: NominalTypeSpanList }
 fn expression_nominal_type_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, references: CallSiteList) -> (result: NominalTypeSpanList) {
-    iterate i up_to 1024 carrying st: NominalExpressionSpanWalk = NominalExpressionSpanWalk { rest: references, acc: NominalTypeSpanList.NSNil } { next st = expression_nominal_type_span_step<P, N>(pages, stride, total, st); }
+    let initial: NominalExpressionSpanWalk = NominalExpressionSpanWalk { rest: references, acc: NominalTypeSpanList.NSNil };
+    iterate chunk up_to 64 carrying st: NominalExpressionSpanWalk = initial {
+        if call_site_list_empty(st.rest) { return st.acc; }
+        next st = expression_nominal_type_span_chunk<P, N>(pages, stride, total, st);
+    }
     return st.acc;
+}
+fn expression_nominal_type_span_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: NominalExpressionSpanWalk) -> (result: NominalExpressionSpanWalk) {
+    iterate i up_to 1024 carrying st: NominalExpressionSpanWalk = initial {
+        if call_site_list_empty(st.rest) { return st; }
+        next st = expression_nominal_type_span_step<P, N>(pages, stride, total, st);
+    }
+    return st;
 }
 fn expression_nominal_type_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalExpressionSpanWalk) -> (result: NominalExpressionSpanWalk) {
     return match st.rest {
@@ -4506,10 +4542,19 @@ fn add_expression_nominal_type_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_
 }
 record NominalPatternSpanWalk { rest: CallSiteList, acc: NominalTypeSpanList }
 fn finite_pattern_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, qualifiers: CallSiteList) -> (result: NominalTypeSpanList) {
-    iterate i up_to 1024 carrying st: NominalPatternSpanWalk = NominalPatternSpanWalk { rest: qualifiers, acc: NominalTypeSpanList.NSNil } {
-        next st = finite_pattern_nominal_span_step<P, N>(pages, stride, total, st);
+    let initial: NominalPatternSpanWalk = NominalPatternSpanWalk { rest: qualifiers, acc: NominalTypeSpanList.NSNil };
+    iterate chunk up_to 64 carrying st: NominalPatternSpanWalk = initial {
+        if call_site_list_empty(st.rest) { return st.acc; }
+        next st = finite_pattern_nominal_span_chunk<P, N>(pages, stride, total, st);
     }
     return st.acc;
+}
+fn finite_pattern_nominal_span_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: NominalPatternSpanWalk) -> (result: NominalPatternSpanWalk) {
+    iterate i up_to 1024 carrying st: NominalPatternSpanWalk = initial {
+        if call_site_list_empty(st.rest) { return st; }
+        next st = finite_pattern_nominal_span_step<P, N>(pages, stride, total, st);
+    }
+    return st;
 }
 fn finite_pattern_nominal_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalPatternSpanWalk) -> (result: NominalPatternSpanWalk) {
     return match st.rest {
@@ -4541,10 +4586,19 @@ fn nominal_pattern_path_dot_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 }
 record NominalSpanAppend { rest: NominalTypeSpanList, acc: NominalTypeSpanList }
 fn append_nominal_type_spans(add: NominalTypeSpanList, base: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
-    iterate i up_to 1024 carrying st: NominalSpanAppend = NominalSpanAppend { rest: add, acc: base } {
-        next st = append_nominal_type_span_step(st);
+    let initial: NominalSpanAppend = NominalSpanAppend { rest: add, acc: base };
+    iterate chunk up_to 64 carrying st: NominalSpanAppend = initial {
+        if nominal_type_span_list_empty(st.rest) { return st.acc; }
+        next st = append_nominal_type_span_chunk(st);
     }
     return st.acc;
+}
+fn append_nominal_type_span_chunk(initial: NominalSpanAppend) -> (result: NominalSpanAppend) {
+    iterate i up_to 1024 carrying st: NominalSpanAppend = initial {
+        if nominal_type_span_list_empty(st.rest) { return st; }
+        next st = append_nominal_type_span_step(st);
+    }
+    return st;
 }
 fn append_nominal_type_span_step(st: NominalSpanAppend) -> (result: NominalSpanAppend) {
     return match st.rest {
@@ -4566,6 +4620,7 @@ fn collect_function_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to
 }
 fn collect_body_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, body: StmtList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
     iterate i up_to 1024 carrying st: NominalStmtWalk = NominalStmtWalk { rest: body, acc: acc } {
+        if stmt_list_empty(st.rest) { return st.acc; }
         next st = collect_body_nominal_span_step<P, N>(pages, stride, total, st);
     }
     return st.acc;
@@ -4623,6 +4678,7 @@ fn collect_one_enum_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to
 }
 fn collect_variant_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, variants: VariantList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
     iterate i up_to 1024 carrying st: NominalVariantWalk = NominalVariantWalk { variants: variants, acc: acc } {
+        if variant_list_empty(st.variants) { return st.acc; }
         next st = collect_variant_nominal_span_step<P, N>(pages, stride, total, st);
     }
     return st.acc;
@@ -4635,6 +4691,7 @@ fn collect_variant_nominal_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up
 }
 fn collect_field_nominal_spans<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: FieldList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
     iterate i up_to 1024 carrying st: NominalFieldWalk = NominalFieldWalk { fields: fields, acc: acc } {
+        if field_list_empty(st.fields) { return st.acc; }
         next st = collect_field_nominal_span_step<P, N>(pages, stride, total, st);
     }
     return st.acc;
@@ -4666,75 +4723,128 @@ fn invalid_semantic_identity() -> (result: SemanticIdentity) {
     return SemanticIdentity { bytes: [0 as byte; 512], len: 0, valid: false };
 }
 fn semantic_identity_equal(a: SemanticIdentity, b: SemanticIdentity) -> (result: bool) {
-    if !(a.valid) || !(b.valid) || a.len != b.len { return false; }
-    iterate i over a.bytes carrying same: bool = true {
-        next same = semantic_identity_equal_step(a, b, i, same);
+    if !(a.valid) || !(b.valid) || a.len != b.len || a.len > 512 { return false; }
+    iterate i up_to 512 carrying idx: u64 = 0 {
+        if idx >= a.len { return true; }
+        if a.bytes[idx] != b.bytes[idx] { return false; }
+        next idx = idx + 1;
     }
-    return same;
+    return true;
 }
-fn semantic_identity_equal_step(a: SemanticIdentity, b: SemanticIdentity, i: u64, same: bool) -> (result: bool) {
-    if !(same) || i >= a.len { return same; }
-    return a.bytes[i] == b.bytes[i];
+fn nominal_identity_head(list: NominalTypeIdentityList) -> (result: NominalTypeIdentity) {
+    return match list {
+        NINil => NominalTypeIdentity { start: 0, end: 0, identity: invalid_semantic_identity(), reference: false },
+        NICons { head: item, tail: rest } => item
+    };
+}
+fn nominal_identity_tail(list: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    return match list {
+        NINil => NominalTypeIdentityList.NINil,
+        NICons { head: item, tail: rest } => rest
+    };
+}
+fn nominal_identity_head_matches_at(list: NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    return match list {
+        NINil => false,
+        NICons { head: item, tail: rest } => item.reference && item.start == start && item.end == end && item.identity.valid
+    };
+}
+fn nominal_identity_head_matches_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    return match list {
+        NINil => false,
+        NICons { head: item, tail: rest } => !(item.reference) && spans_equal<P, N>(pages, stride, total, item.start, item.end, start, end)
+    };
+}
+fn nominal_identity_head_matches_ref(list: NominalTypeIdentityList, wanted: SemanticIdentity) -> (result: bool) {
+    return match list {
+        NINil => false,
+        NICons { head: item, tail: rest } => item.reference && semantic_identity_equal(item.identity, wanted)
+    };
 }
 fn nominal_identity_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
-    iterate i up_to 1024 carrying st: NominalLookup = NominalLookup { rest: types, found: false, identity: invalid_semantic_identity() } {
-        next st = nominal_identity_at_step<P, N>(pages, stride, total, st, start, end);
+    iterate chunk up_to 64 carrying outer: NominalTypeIdentityList = types {
+        iterate i up_to 1024 carrying rest: NominalTypeIdentityList = outer {
+            if nominal_type_identity_list_empty(rest) {
+                return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
+            }
+            if nominal_identity_head_matches_at(rest, start, end) {
+                let item: NominalTypeIdentity = nominal_identity_head(rest);
+                return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
+            }
+            next rest = nominal_identity_tail(rest);
+        }
+        if nominal_type_identity_list_empty(rest) {
+            return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
+        }
+        next outer = rest;
     }
-    return st;
-}
-fn nominal_identity_at_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalLookup, start: u64, end: u64) -> (result: NominalLookup) {
-    if st.found { return st; }
-    return match st.rest {
-        NINil => st,
-        NICons { head: item, tail: rest } => nominal_identity_at_cons<P, N>(pages, stride, total, st, item, rest, start, end)
-    };
-}
-fn nominal_identity_at_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
-    if item.reference && item.start == start && item.end == end && item.identity.valid {
-        return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
-    }
-    return NominalLookup { rest: rest, found: false, identity: st.identity };
+    return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
 }
 fn nominal_identity_by_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
-    iterate i up_to 1024 carrying st: NominalLookup = NominalLookup { rest: types, found: false, identity: invalid_semantic_identity() } {
-        next st = nominal_identity_by_name_step<P, N>(pages, stride, total, st, start, end);
+    iterate chunk up_to 64 carrying outer: NominalTypeIdentityList = types {
+        iterate i up_to 1024 carrying rest: NominalTypeIdentityList = outer {
+            if nominal_type_identity_list_empty(rest) {
+                return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
+            }
+            if nominal_identity_head_matches_name<P, N>(pages, stride, total, rest, start, end) {
+                let item: NominalTypeIdentity = nominal_identity_head(rest);
+                return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
+            }
+            next rest = nominal_identity_tail(rest);
+        }
+        if nominal_type_identity_list_empty(rest) {
+            return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
+        }
+        next outer = rest;
     }
-    return st;
-}
-fn nominal_identity_by_name_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalLookup, start: u64, end: u64) -> (result: NominalLookup) {
-    if st.found { return st; }
-    return match st.rest {
-        NINil => st,
-        NICons { head: item, tail: rest } => nominal_identity_by_name_cons<P, N>(pages, stride, total, st, item, rest, start, end)
-    };
-}
-fn nominal_identity_by_name_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NominalLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
-    if !(item.reference) && spans_equal<P, N>(pages, stride, total, item.start, item.end, start, end) {
-        return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
-    }
-    return NominalLookup { rest: rest, found: false, identity: st.identity };
+    return NominalLookup { rest: NominalTypeIdentityList.NINil, found: false, identity: invalid_semantic_identity() };
 }
 fn nominal_reference_by_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList, wanted: SemanticIdentity) -> (result: NominalRefLookup) {
-    iterate i up_to 1024 carrying st: NominalRefLookup = NominalRefLookup { rest: types, wanted: wanted, found: false, start: 0, end: 0 } {
-        next st = nominal_reference_by_identity_step(st);
+    iterate chunk up_to 64 carrying outer: NominalTypeIdentityList = types {
+        iterate i up_to 1024 carrying rest: NominalTypeIdentityList = outer {
+            if nominal_type_identity_list_empty(rest) {
+                return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
+            }
+            if nominal_identity_head_matches_ref(rest, wanted) {
+                let item: NominalTypeIdentity = nominal_identity_head(rest);
+                return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: true, start: item.start, end: item.end };
+            }
+            next rest = nominal_identity_tail(rest);
+        }
+        if nominal_type_identity_list_empty(rest) {
+            return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
+        }
+        next outer = rest;
     }
-    return st;
+    return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
 }
-fn nominal_reference_by_identity_step(st: NominalRefLookup) -> (result: NominalRefLookup) {
-    if st.found { return st; }
-    return match st.rest {
-        NINil => st,
-        NICons { head: item, tail: rest } => nominal_reference_by_identity_cons(st, item, rest)
+fn nominal_identity_head_matches_marker_ref(list: NominalTypeIdentityList, wanted: SemanticIdentity) -> (result: bool) {
+    return match list {
+        NINil => false,
+        NICons { head: item, tail: rest } => item.reference && generic_type_marker_index(item.start, item.end) > 1024 && semantic_identity_equal(item.identity, wanted)
     };
 }
-fn nominal_reference_by_identity_cons(st: NominalRefLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList) -> (result: NominalRefLookup) {
-    if item.reference && semantic_identity_equal(item.identity, st.wanted) {
-        return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: st.wanted, found: true, start: item.start, end: item.end };
+fn nominal_marker_reference_by_identity(types: NominalTypeIdentityList, wanted: SemanticIdentity) -> (result: NominalRefLookup) {
+    iterate chunk up_to 64 carrying outer: NominalTypeIdentityList = types {
+        iterate i up_to 1024 carrying rest: NominalTypeIdentityList = outer {
+            if nominal_type_identity_list_empty(rest) {
+                return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
+            }
+            if nominal_identity_head_matches_marker_ref(rest, wanted) {
+                let item: NominalTypeIdentity = nominal_identity_head(rest);
+                return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: true, start: item.start, end: item.end };
+            }
+            next rest = nominal_identity_tail(rest);
+        }
+        if nominal_type_identity_list_empty(rest) {
+            return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
+        }
+        next outer = rest;
     }
-    return NominalRefLookup { rest: rest, wanted: st.wanted, found: false, start: st.start, end: st.end };
+    return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: wanted, found: false, start: 0, end: 0 };
 }
 fn nominal_semantic_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList, identity: SemanticIdentity, source_start: u64, source_end: u64) -> (result: NominalTypeSpan) {
-    let reference: NominalRefLookup = nominal_reference_by_identity<P, N>(pages, stride, total, types, identity);
+    let reference: NominalRefLookup = nominal_marker_reference_by_identity(types, identity);
     if reference.found && generic_type_marker_index(reference.start, reference.end) > 1024 { return NominalTypeSpan { start: reference.start, end: reference.end, kind: 0 }; }
     return NominalTypeSpan { start: source_start, end: source_end, kind: 0 };
 }
@@ -5306,6 +5416,7 @@ fn callable_identity_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
 fn callable_identity_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemanticIdentityBuild, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
     if end < start || end > total { return SemanticIdentityBuild { ..st, valid: false }; }
     iterate i up_to 1024 carrying d: SemanticIdentityBuild = st {
+        if !(d.valid) || start + i >= end { return d; }
         next d = callable_identity_span_step<P, N>(pages, stride, total, d, start + i, start, end);
     }
     return d;
@@ -5456,6 +5567,7 @@ fn identity_component_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
 fn identity_component_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemanticIdentityBuild, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
     if end < start || end > total { return SemanticIdentityBuild { ..st, valid: false }; }
     iterate i up_to 1024 carrying d: IdentityComponentSpan = IdentityComponentSpan { pos: start, end: end, build: st } {
+        if !(d.build.valid) || d.pos >= d.end { return d.build; }
         next d = identity_component_span_step<P, N>(pages, stride, total, d);
     }
     return d.build;
@@ -5570,6 +5682,7 @@ fn append_identity_component_step(st: IdentityBytesScan) -> (result: IdentityByt
 fn append_identity_component(build: SemanticIdentityBuild, identity: SemanticIdentity) -> (result: SemanticIdentityBuild) {
     if !(identity.valid) || identity.len == 0 { return SemanticIdentityBuild { ..build, valid: false }; }
     iterate i over identity.bytes carrying st: IdentityBytesScan = IdentityBytesScan { identity: identity, offset: 0, build: build } {
+        if !(st.build.valid) || st.offset >= st.identity.len { return st.build; }
         next st = append_identity_component_step(st);
     }
     return st.build;
@@ -5587,6 +5700,9 @@ fn canonical_record_type_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to
     let sep4: SemanticIdentityBuild = callable_identity_byte(sep3, 58 as byte);
     let sorted: FieldList = sort_fields_by_name<P, N>(pages, stride, total, declaration.fields);
     iterate i up_to 1024 carrying st: RecordIdentityBuild = RecordIdentityBuild { build: sep4, fields: sorted, nominals: nominals, valid: true } {
+        if !(st.build.valid) || field_list_empty(st.fields) {
+            return SemanticIdentity { bytes: st.build.bytes, len: st.build.len, valid: st.build.valid && st.valid && module_end > module_start && declaration.name_end > declaration.name_start };
+        }
         next st = append_record_field_identity<P, N>(pages, stride, total, st);
     }
     return SemanticIdentity { bytes: st.build.bytes, len: st.build.len, valid: st.build.valid && st.valid && module_end > module_start && declaration.name_end > declaration.name_start };
@@ -5605,11 +5721,15 @@ fn append_record_field_identity_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_
     return RecordIdentityBuild { build: semi, fields: rest, nominals: st.nominals, valid: st.valid };
 }
 fn record_field_type_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: NominalTypeIdentityList, build: SemanticIdentityBuild, field: Field) -> (result: SemanticIdentityBuild) {
-    if field.type_kind == 5 || field.type_kind == 6 {
-        // Stage-0's structural record fingerprint retains the declaring
-        // source spelling of each field type. Semantic ownership is carried
-        // separately by nominal references; substituting an imported
-        // identity here would change the canonical record identity.
+    if field.type_kind == 6 {
+        // Stage-0's `canonical_value_type` substitutes the resolved semantic
+        // identity for qualified nominal field types (`alias.Type`), while
+        // preserving the unqualified source spelling for `type_kind == 5`.
+        let resolved: NominalLookup = nominal_identity_at<P, N>(pages, stride, total, nominals, field.type_start, field.type_end);
+        if resolved.found {
+            let expanded: SemanticIdentityBuild = append_identity_component(build, resolved.identity);
+            if expanded.valid { return expanded; }
+        }
         return identity_component_span<P, N>(pages, stride, total, build, field.type_start, field.type_end);
     }
     if field.type_kind == 1 || field.type_kind == 2 || field.type_kind == 3 || field.type_kind == 4 || field.type_kind == 5 || field.type_kind == 7 || field.type_kind == 8 {
@@ -5618,22 +5738,51 @@ fn record_field_type_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     return SemanticIdentityBuild { ..build, valid: false };
 }
 
-record DeclNominalWalk { enums: EnumList, records: RecordList, header: parser.Header, acc: NominalTypeIdentityList }
+record DeclNominalWalk { enums: EnumList, records: RecordList, header: parser.Header, refs: NominalTypeIdentityList, acc: NominalTypeIdentityList }
+fn decl_nominal_walk_done(st: DeclNominalWalk) -> (result: bool) {
+    return enum_list_empty(st.enums) && record_list_empty(st.records);
+}
 fn local_nominal_type_identities<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: Unit) -> (result: NominalTypeIdentityList) {
     return local_nominal_type_identities_with_references<P, N>(pages, stride, total, unit, NominalTypeIdentityList.NINil);
 }
-fn local_nominal_type_identities_with_references<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: Unit, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
-    iterate i up_to 1024 carrying st: DeclNominalWalk = DeclNominalWalk { enums: unit.enums, records: unit.records, header: unit.header, acc: references } {
-        next st = local_nominal_identity_step<P, N>(pages, stride, total, st);
+fn local_nominal_type_identities_using_references<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: Unit, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    let initial: DeclNominalWalk = DeclNominalWalk { enums: unit.enums, records: unit.records, header: unit.header, refs: references, acc: NominalTypeIdentityList.NINil };
+    iterate chunk up_to 64 carrying st: DeclNominalWalk = initial {
+        if decl_nominal_walk_done(st) { return st.acc; }
+        next st = local_nominal_identity_chunk<P, N>(pages, stride, total, st);
     }
     return st.acc;
 }
-record NominalReferenceWalk { rest: NominalTypeIdentityList, acc: NominalTypeIdentityList }
-fn nominal_reference_entries<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
-    iterate i up_to 1024 carrying st: NominalReferenceWalk = NominalReferenceWalk { rest: types, acc: NominalTypeIdentityList.NINil } {
-        next st = nominal_reference_entry_step(st);
+fn local_nominal_type_identities_with_references<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: Unit, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    let initial: DeclNominalWalk = DeclNominalWalk { enums: unit.enums, records: unit.records, header: unit.header, refs: references, acc: references };
+    iterate chunk up_to 64 carrying st: DeclNominalWalk = initial {
+        if decl_nominal_walk_done(st) { return st.acc; }
+        next st = local_nominal_identity_chunk<P, N>(pages, stride, total, st);
     }
     return st.acc;
+}
+fn local_nominal_identity_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: DeclNominalWalk) -> (result: DeclNominalWalk) {
+    iterate i up_to 1024 carrying st: DeclNominalWalk = initial {
+        if decl_nominal_walk_done(st) { return st; }
+        next st = local_nominal_identity_step<P, N>(pages, stride, total, st);
+    }
+    return st;
+}
+record NominalReferenceWalk { rest: NominalTypeIdentityList, acc: NominalTypeIdentityList }
+fn nominal_reference_entries<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, types: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    let initial: NominalReferenceWalk = NominalReferenceWalk { rest: types, acc: NominalTypeIdentityList.NINil };
+    iterate chunk up_to 64 carrying st: NominalReferenceWalk = initial {
+        if nominal_type_identity_list_empty(st.rest) { return st.acc; }
+        next st = nominal_reference_entry_chunk(st);
+    }
+    return st.acc;
+}
+fn nominal_reference_entry_chunk(initial: NominalReferenceWalk) -> (result: NominalReferenceWalk) {
+    iterate i up_to 1024 carrying st: NominalReferenceWalk = initial {
+        if nominal_type_identity_list_empty(st.rest) { return st; }
+        next st = nominal_reference_entry_step(st);
+    }
+    return st;
 }
 fn nominal_reference_entry_step(st: NominalReferenceWalk) -> (result: NominalReferenceWalk) {
     return match st.rest {
@@ -5647,10 +5796,19 @@ fn nominal_reference_entry_one(st: NominalReferenceWalk, item: NominalTypeIdenti
 }
 record NominalMergeWalk { rest: NominalTypeIdentityList, acc: NominalTypeIdentityList }
 fn combine_nominal_type_identities<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, local: NominalTypeIdentityList, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
-    iterate i up_to 1024 carrying st: NominalMergeWalk = NominalMergeWalk { rest: local, acc: references } {
-        next st = combine_nominal_type_identity_step(st);
+    let initial: NominalMergeWalk = NominalMergeWalk { rest: local, acc: references };
+    iterate chunk up_to 64 carrying st: NominalMergeWalk = initial {
+        if nominal_type_identity_list_empty(st.rest) { return st.acc; }
+        next st = combine_nominal_type_identity_chunk(st);
     }
     return st.acc;
+}
+fn combine_nominal_type_identity_chunk(initial: NominalMergeWalk) -> (result: NominalMergeWalk) {
+    iterate i up_to 1024 carrying st: NominalMergeWalk = initial {
+        if nominal_type_identity_list_empty(st.rest) { return st; }
+        next st = combine_nominal_type_identity_step(st);
+    }
+    return st;
 }
 fn combine_nominal_type_identity_step(st: NominalMergeWalk) -> (result: NominalMergeWalk) {
     return match st.rest {
@@ -5676,7 +5834,7 @@ fn local_record_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stri
     };
 }
 fn local_record_identity_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: DeclNominalWalk, item: RecordDecl, rest: RecordList) -> (result: DeclNominalWalk) {
-    let identity: SemanticIdentity = canonical_record_type_identity<P, N>(pages, stride, total, st.header.module_start, st.header.module_end, item, st.acc);
+    let identity: SemanticIdentity = canonical_record_type_identity<P, N>(pages, stride, total, st.header.module_start, st.header.module_end, item, st.refs);
     let nominal: NominalTypeIdentity = NominalTypeIdentity { start: item.name_start, end: item.name_end, identity: identity, reference: false };
     return DeclNominalWalk { ..st, records: rest, acc: NominalTypeIdentityList.NICons { head: nominal, tail: st.acc } };
 }
@@ -9274,56 +9432,62 @@ record ImportedEnumLookup { rest: ImportedEnumList, wanted: SemanticIdentity, fo
 record ImportedEnumVariantLookup { rest: ImportedEnumVariantList, wanted: SemanticIdentity, found: bool, variant: ImportedEnumVariant }
 record ImportedEnumFieldLookup { rest: ImportedEnumFieldList, wanted: SemanticIdentity, found: bool, field: ImportedEnumField }
 record ImportedPayloadBindLookup { rest: BindList, start: u64, end: u64, found: bool, field: Bind }
+fn imported_record_list_empty(list: ImportedRecordList) -> (result: bool) { return match list { IRNil => true, IRCons { head: h, tail: t } => false }; }
+fn imported_record_head_matches(list: ImportedRecordList, wanted: SemanticIdentity) -> (result: bool) {
+    return match list { IRNil => false, IRCons { head: schema, tail: rest } => semantic_identity_equal(schema.identity, wanted) };
+}
+fn imported_record_head(list: ImportedRecordList) -> (result: ImportedRecordSchema) {
+    return match list { IRNil => ImportedRecordSchema { identity: invalid_semantic_identity(), fields: ImportedRecordFieldList.IRFNil }, IRCons { head: schema, tail: rest } => schema };
+}
+fn imported_record_tail(list: ImportedRecordList) -> (result: ImportedRecordList) {
+    return match list { IRNil => ImportedRecordList.IRNil, IRCons { head: schema, tail: rest } => rest };
+}
 fn imported_record_lookup(records: ImportedRecordList, wanted: SemanticIdentity) -> (result: ImportedRecordLookup) {
     let empty: ImportedRecordSchema = ImportedRecordSchema { identity: invalid_semantic_identity(), fields: ImportedRecordFieldList.IRFNil };
-    iterate i up_to 1024 carrying st: ImportedRecordLookup = ImportedRecordLookup { rest: records, wanted: wanted, found: false, schema: empty } {
-        if st.found { return st; }
-        next st = imported_record_lookup_step(st);
+    iterate i up_to 1024 carrying rest: ImportedRecordList = records {
+        if imported_record_list_empty(rest) { return ImportedRecordLookup { rest: ImportedRecordList.IRNil, wanted: wanted, found: false, schema: empty }; }
+        if imported_record_head_matches(rest, wanted) { return ImportedRecordLookup { rest: ImportedRecordList.IRNil, wanted: wanted, found: true, schema: imported_record_head(rest) }; }
+        next rest = imported_record_tail(rest);
     }
-    return st;
+    return ImportedRecordLookup { rest: ImportedRecordList.IRNil, wanted: wanted, found: false, schema: empty };
 }
-fn imported_record_lookup_step(st: ImportedRecordLookup) -> (result: ImportedRecordLookup) {
-    return match st.rest {
-        IRNil => st,
-        IRCons { head: schema, tail: rest } => imported_record_lookup_one(st, schema, rest)
-    };
+fn imported_field_list_empty(list: ImportedRecordFieldList) -> (result: bool) { return match list { IRFNil => true, IRFCons { head: h, tail: t } => false }; }
+fn imported_field_head_matches(list: ImportedRecordFieldList, wanted: SemanticIdentity) -> (result: bool) {
+    return match list { IRFNil => false, IRFCons { head: field, tail: rest } => semantic_identity_equal(field.name, wanted) };
 }
-fn imported_record_lookup_one(st: ImportedRecordLookup, schema: ImportedRecordSchema, rest: ImportedRecordList) -> (result: ImportedRecordLookup) {
-    if semantic_identity_equal(schema.identity, st.wanted) { return ImportedRecordLookup { rest: ImportedRecordList.IRNil, wanted: st.wanted, found: true, schema: schema }; }
-    return ImportedRecordLookup { ..st, rest: rest };
+fn imported_field_head(list: ImportedRecordFieldList) -> (result: ImportedRecordField) {
+    return match list { IRFNil => ImportedRecordField { name: invalid_semantic_identity(), index: 0, ty: SemType.TPoison, type_valid: false }, IRFCons { head: field, tail: rest } => field };
+}
+fn imported_field_tail(list: ImportedRecordFieldList) -> (result: ImportedRecordFieldList) {
+    return match list { IRFNil => ImportedRecordFieldList.IRFNil, IRFCons { head: field, tail: rest } => rest };
 }
 fn imported_field_lookup(fields: ImportedRecordFieldList, wanted: SemanticIdentity) -> (result: ImportedFieldLookup) {
     let empty: ImportedRecordField = ImportedRecordField { name: invalid_semantic_identity(), index: 0, ty: SemType.TPoison, type_valid: false };
-    iterate i up_to 1024 carrying st: ImportedFieldLookup = ImportedFieldLookup { rest: fields, wanted: wanted, found: false, field: empty } {
-        if st.found { return st; }
-        next st = imported_field_lookup_step(st);
+    iterate i up_to 1024 carrying rest: ImportedRecordFieldList = fields {
+        if imported_field_list_empty(rest) { return ImportedFieldLookup { rest: ImportedRecordFieldList.IRFNil, wanted: wanted, found: false, field: empty }; }
+        if imported_field_head_matches(rest, wanted) { return ImportedFieldLookup { rest: ImportedRecordFieldList.IRFNil, wanted: wanted, found: true, field: imported_field_head(rest) }; }
+        next rest = imported_field_tail(rest);
     }
-    return st;
+    return ImportedFieldLookup { rest: ImportedRecordFieldList.IRFNil, wanted: wanted, found: false, field: empty };
 }
-fn imported_field_lookup_step(st: ImportedFieldLookup) -> (result: ImportedFieldLookup) {
-    return match st.rest {
-        IRFNil => st,
-        IRFCons { head: field, tail: rest } => imported_field_lookup_one(st, field, rest)
-    };
+fn imported_enum_list_empty(list: ImportedEnumList) -> (result: bool) { return match list { IENil => true, IECons { head: h, tail: t } => false }; }
+fn imported_enum_head_matches(list: ImportedEnumList, wanted: SemanticIdentity) -> (result: bool) {
+    return match list { IENil => false, IECons { head: schema, tail: rest } => semantic_identity_equal(schema.identity, wanted) };
 }
-fn imported_field_lookup_one(st: ImportedFieldLookup, field: ImportedRecordField, rest: ImportedRecordFieldList) -> (result: ImportedFieldLookup) {
-    if semantic_identity_equal(field.name, st.wanted) { return ImportedFieldLookup { rest: ImportedRecordFieldList.IRFNil, wanted: st.wanted, found: true, field: field }; }
-    return ImportedFieldLookup { ..st, rest: rest };
+fn imported_enum_head(list: ImportedEnumList) -> (result: ImportedEnumSchema) {
+    return match list { IENil => ImportedEnumSchema { identity: invalid_semantic_identity(), variants: ImportedEnumVariantList.IEVNil }, IECons { head: schema, tail: rest } => schema };
+}
+fn imported_enum_tail(list: ImportedEnumList) -> (result: ImportedEnumList) {
+    return match list { IENil => ImportedEnumList.IENil, IECons { head: schema, tail: rest } => rest };
 }
 fn imported_enum_lookup(enums: ImportedEnumList, wanted: SemanticIdentity) -> (result: ImportedEnumLookup) {
     let empty: ImportedEnumSchema = ImportedEnumSchema { identity: invalid_semantic_identity(), variants: ImportedEnumVariantList.IEVNil };
-    iterate i up_to 1024 carrying st: ImportedEnumLookup = ImportedEnumLookup { rest: enums, wanted: wanted, found: false, schema: empty } { if st.found { return st; } next st = imported_enum_lookup_step(st); }
-    return st;
-}
-fn imported_enum_lookup_step(st: ImportedEnumLookup) -> (result: ImportedEnumLookup) {
-    return match st.rest {
-        IENil => st,
-        IECons { head: schema, tail: rest } => imported_enum_lookup_one(st, schema, rest)
-    };
-}
-fn imported_enum_lookup_one(st: ImportedEnumLookup, schema: ImportedEnumSchema, rest: ImportedEnumList) -> (result: ImportedEnumLookup) {
-    if semantic_identity_equal(schema.identity, st.wanted) { return ImportedEnumLookup { rest: ImportedEnumList.IENil, wanted: st.wanted, found: true, schema: schema }; }
-    return ImportedEnumLookup { ..st, rest: rest };
+    iterate i up_to 1024 carrying rest: ImportedEnumList = enums {
+        if imported_enum_list_empty(rest) { return ImportedEnumLookup { rest: ImportedEnumList.IENil, wanted: wanted, found: false, schema: empty }; }
+        if imported_enum_head_matches(rest, wanted) { return ImportedEnumLookup { rest: ImportedEnumList.IENil, wanted: wanted, found: true, schema: imported_enum_head(rest) }; }
+        next rest = imported_enum_tail(rest);
+    }
+    return ImportedEnumLookup { rest: ImportedEnumList.IENil, wanted: wanted, found: false, schema: empty };
 }
 fn imported_enum_variant_lookup(variants: ImportedEnumVariantList, wanted: SemanticIdentity) -> (result: ImportedEnumVariantLookup) {
     let empty: ImportedEnumVariant = ImportedEnumVariant { name: invalid_semantic_identity(), fields: ImportedEnumFieldList.IEFNil };

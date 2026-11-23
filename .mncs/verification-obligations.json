@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 53,
+  "revision": 54,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2678,6 +2678,55 @@
         "entrypoint": "mncs-test run",
         "source_paths": [
           "tests/decl_use_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.decl-nominal-span-collection-native",
+      "title": "First-class nominal span collection and identity lookup reach record, enum, and late-function references past 1,024 declarations",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::collect_unit_nominal_type_spans",
+        "mncs:0.2:function:mncs.compiler.decl.v1::nominal_identity_at",
+        "mncs:0.2:function:mncs.compiler.decl.v1::nominal_reference_entries"
+      ],
+      "invalidation_dependencies": [
+        "tests/decl_nominal_span_collection_suite.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/decl_nominal_span_collection_suite.mncs"
         ],
         "library_paths": [
           "src"

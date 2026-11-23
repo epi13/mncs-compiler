@@ -1,0 +1,233 @@
+mncs 0.18;
+module tests.compiler_decl_nominal_span_collection;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.parser.v1 as parser;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+fn empty_fn_body() -> (result: decl.FnBody) {
+    return decl.FnBody {
+        body: decl.StmtList.SNil,
+        ret: decl.Expr.Integer { start: 0, end: 0, value: 0, overflow: false },
+        has_ret: false
+    };
+}
+
+fn plain_fn() -> (result: decl.FnDecl) {
+    let sig: decl.FnSig = decl.FnSig {
+        name_start: 1, name_end: 2,
+        generics: decl.GenericParamList.GNil,
+        params: decl.FieldList.FNil,
+        results: decl.FieldList.FNil,
+        contracts: decl.ClauseList.CNil,
+        effects: decl.EffectList.XNil,
+        capabilities: decl.CapList.ANil
+    };
+    return decl.FnDecl {
+        ok: true, err_start: 0, err_end: 0, sig: sig, body: empty_fn_body(),
+        fn_start: 0, fn_end: 0, cursor: 0
+    };
+}
+
+fn late_qualified_fn() -> (result: decl.FnDecl) {
+    let param_field: decl.Field = decl.Field {
+        name_start: 195, name_end: 196, type_start: 200, type_end: 209, type_kind: 6
+    };
+    let ret_field: decl.Field = decl.Field {
+        name_start: 206, name_end: 207, type_start: 210, type_end: 219, type_kind: 6
+    };
+    let sig: decl.FnSig = decl.FnSig {
+        name_start: 190, name_end: 194,
+        generics: decl.GenericParamList.GNil,
+        params: decl.FieldList.FCons { head: param_field, tail: decl.FieldList.FNil },
+        results: decl.FieldList.FCons { head: ret_field, tail: decl.FieldList.FNil },
+        contracts: decl.ClauseList.CNil,
+        effects: decl.EffectList.XNil,
+        capabilities: decl.CapList.ANil
+    };
+    return decl.FnDecl {
+        ok: true, err_start: 0, err_end: 0, sig: sig, body: empty_fn_body(),
+        fn_start: 185, fn_end: 225, cursor: 225
+    };
+}
+
+fn cons8_plain_fns(stub: decl.FnDecl, acc: decl.FnList) -> (result: decl.FnList) {
+    let a1: decl.FnList = decl.FnList.DCons { head: stub, tail: acc };
+    let a2: decl.FnList = decl.FnList.DCons { head: stub, tail: a1 };
+    let a3: decl.FnList = decl.FnList.DCons { head: stub, tail: a2 };
+    let a4: decl.FnList = decl.FnList.DCons { head: stub, tail: a3 };
+    let a5: decl.FnList = decl.FnList.DCons { head: stub, tail: a4 };
+    let a6: decl.FnList = decl.FnList.DCons { head: stub, tail: a5 };
+    let a7: decl.FnList = decl.FnList.DCons { head: stub, tail: a6 };
+    return decl.FnList.DCons { head: stub, tail: a7 };
+}
+
+fn plain_record() -> (result: decl.RecordDecl) {
+    return decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 1, name_end: 2,
+        fields: decl.FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0
+    };
+}
+
+fn cons8_plain_records(stub: decl.RecordDecl, acc: decl.RecordList) -> (result: decl.RecordList) {
+    let a1: decl.RecordList = decl.RecordList.RCons { head: stub, tail: acc };
+    let a2: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a1 };
+    let a3: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a2 };
+    let a4: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a3 };
+    let a5: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a4 };
+    let a6: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a5 };
+    let a7: decl.RecordList = decl.RecordList.RCons { head: stub, tail: a6 };
+    return decl.RecordList.RCons { head: stub, tail: a7 };
+}
+
+fn prepend_64_plain_fns(tail: decl.FnList) -> (result: decl.FnList) {
+    let stub: decl.FnDecl = plain_fn();
+    iterate i up_to 8 carrying acc: decl.FnList = tail {
+        next acc = cons8_plain_fns(stub, acc);
+    }
+    return acc;
+}
+
+fn prepend_960_plain_records(tail: decl.RecordList) -> (result: decl.RecordList) {
+    let stub: decl.RecordDecl = plain_record();
+    iterate i up_to 30 carrying acc: decl.RecordList = tail {
+        let b1: decl.RecordList = cons8_plain_records(stub, acc);
+        let b2: decl.RecordList = cons8_plain_records(stub, b1);
+        let b3: decl.RecordList = cons8_plain_records(stub, b2);
+        next acc = cons8_plain_records(stub, b3);
+    }
+    return acc;
+}
+
+record SpanScan { rest: decl.NominalTypeSpanList, count: u64, has_record: bool, has_enum: bool, has_late_param: bool, has_late_ret: bool }
+
+fn span_list_empty(list: decl.NominalTypeSpanList) -> (result: bool) {
+    return match list {
+        decl.NominalTypeSpanList.NSNil => true,
+        decl.NominalTypeSpanList.NSCons { head: h, tail: t } => false
+    };
+}
+
+fn scan_span_step(st: SpanScan) -> (result: SpanScan) {
+    return match st.rest {
+        decl.NominalTypeSpanList.NSNil => st,
+        decl.NominalTypeSpanList.NSCons { head: sp, tail: rest } => SpanScan {
+            rest: rest,
+            count: st.count + 1,
+            has_record: st.has_record || (sp.start == 55 && sp.end == 63 && sp.kind == 6),
+            has_enum: st.has_enum || (sp.start == 120 && sp.end == 129 && sp.kind == 6),
+            has_late_param: st.has_late_param || (sp.start == 200 && sp.end == 209 && sp.kind == 6),
+            has_late_ret: st.has_late_ret || (sp.start == 210 && sp.end == 219 && sp.kind == 6)
+        }
+    };
+}
+
+fn make_tag_identity(tag: byte) -> (result: decl.SemanticIdentity) {
+    let base: [byte; 512] = [0 as byte; 512];
+    let b0: [byte; 512] = replace(base, 0, 104 as byte);
+    let b1: [byte; 512] = replace(b0, 1, tag);
+    return decl.SemanticIdentity { bytes: b1, len: 2, valid: true };
+}
+
+fn prepend_dummy_refs(count: u64, tail: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    let dummy_id: decl.SemanticIdentity = make_tag_identity(65 as byte);
+    iterate i up_to 1024 carrying acc: decl.NominalTypeIdentityList = tail {
+        if i >= count { return acc; }
+        let entry: decl.NominalTypeIdentity = decl.NominalTypeIdentity {
+            start: 1000 + i * 2, end: 1001 + i * 2, identity: dummy_id, reference: true
+        };
+        next acc = decl.NominalTypeIdentityList.NICons { head: entry, tail: acc };
+    }
+    return acc;
+}
+
+record RefCountWalk { rest: decl.NominalTypeIdentityList, count: u64 }
+
+fn count_refs_chunk(initial: RefCountWalk) -> (result: RefCountWalk) {
+    iterate i up_to 1024 carrying st: RefCountWalk = initial {
+        if decl.nominal_type_identity_list_empty(st.rest) { return st; }
+        next st = match st.rest {
+            decl.NominalTypeIdentityList.NINil => st,
+            decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => RefCountWalk { rest: rest, count: st.count + 1 }
+        };
+    }
+    return st;
+}
+
+fn count_refs(list: decl.NominalTypeIdentityList) -> (result: u64) {
+    iterate chunk up_to 4 carrying st: RefCountWalk = RefCountWalk { rest: list, count: 0 } {
+        if decl.nominal_type_identity_list_empty(st.rest) { return st.count; }
+        next st = count_refs_chunk(st);
+    }
+    return st.count;
+}
+
+test nominal_span_collection_reaches_record_enum_and_late_fn_past_1024_fns() -> (result: TestResult) {
+    let empty_pages: [[byte; up_to 16]; up_to 1] = [[0 as byte]];
+    let header: parser.Header = parser.Header {
+        state: 8, code: 0, start: 0, end: 0, version_start: 5, version_end: 9,
+        module_start: 18, module_end: 19, next_offset: 20
+    };
+    let rec_field: decl.Field = decl.Field {
+        name_start: 47, name_end: 53, type_start: 55, type_end: 63, type_kind: 6
+    };
+    let rec_decl: decl.RecordDecl = decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 40, name_end: 44,
+        fields: decl.FieldList.FCons { head: rec_field, tail: decl.FieldList.FNil },
+        decl_start: 33, decl_end: 65, cursor: 65
+    };
+    let enum_field: decl.Field = decl.Field {
+        name_start: 112, name_end: 118, type_start: 120, type_end: 129, type_kind: 6
+    };
+    let enum_variant: decl.Variant = decl.Variant {
+        name_start: 105, name_end: 110,
+        fields: decl.FieldList.FCons { head: enum_field, tail: decl.FieldList.FNil }
+    };
+    let enum_decl: decl.EnumDecl = decl.EnumDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 98, name_end: 102,
+        variants: decl.VariantList.VCons { head: enum_variant, tail: decl.VariantList.VNil },
+        decl_start: 93, decl_end: 132, cursor: 132
+    };
+    // Put 64 plain functions + 1 late qualified function (65 functions) and
+    // 960 plain records before the qualified record (#1,026) and qualified
+    // enum (#1,027) so `collect_unit_nominal_type_spans` crosses the 1,024
+    // declaration chunk boundary and reaches every function, record, and enum.
+    let fns_with_late: decl.FnList = decl.FnList.DCons { head: late_qualified_fn(), tail: decl.FnList.DNil };
+    let all_fns: decl.FnList = prepend_64_plain_fns(fns_with_late);
+    let recs_with_qual: decl.RecordList = decl.RecordList.RCons { head: rec_decl, tail: decl.RecordList.RNil };
+    let all_recs: decl.RecordList = prepend_960_plain_records(recs_with_qual);
+    let unit: decl.Unit = decl.Unit {
+        ok: true, err_start: 0, err_end: 0, header: header, uses: decl.UseList.UNil,
+        records: all_recs,
+        enums: decl.EnumList.GCons { head: enum_decl, tail: decl.EnumList.GNil },
+        fns: all_fns, cursor: 225
+    };
+    let spans: decl.NominalTypeSpanList = decl.collect_unit_nominal_type_spans<1, 16>(empty_pages, 16, 0, unit);
+    iterate i up_to 16 carrying st: SpanScan = SpanScan { rest: spans, count: 0, has_record: false, has_enum: false, has_late_param: false, has_late_ret: false } {
+        if span_list_empty(st.rest) {
+            let ok: bool = st.count == 4 && st.has_record && st.has_enum && st.has_late_param && st.has_late_ret;
+            return from_assertion(equals_bool(true, ok, 7301));
+        }
+        next st = scan_span_step(st);
+    }
+    return from_assertion(equals_bool(true, false, 7301));
+}
+
+test nominal_identity_lookup_and_merge_reach_past_1024_entries() -> (result: TestResult) {
+    let empty_pages: [[byte; up_to 16]; up_to 1] = [[0 as byte]];
+    let wanted_id: decl.SemanticIdentity = make_tag_identity(90 as byte);
+    let target_entry: decl.NominalTypeIdentity = decl.NominalTypeIdentity {
+        start: 55, end: 63, identity: wanted_id, reference: true
+    };
+    let list: decl.NominalTypeIdentityList = prepend_dummy_refs(
+        1024,
+        decl.NominalTypeIdentityList.NICons { head: target_entry, tail: decl.NominalTypeIdentityList.NINil }
+    );
+    let found: decl.NominalLookup = decl.nominal_identity_at<1, 16>(empty_pages, 16, 0, list, 55, 63);
+    let missing: decl.NominalLookup = decl.nominal_identity_at<1, 16>(empty_pages, 16, 0, list, 999, 1005);
+    let refs: decl.NominalTypeIdentityList = decl.nominal_reference_entries<1, 16>(empty_pages, 16, 0, list);
+    let ok: bool = found.found && decl.semantic_identity_equal(found.identity, wanted_id)
+        && !(missing.found) && count_refs(refs) == 1025;
+    return from_assertion(equals_bool(true, ok, 7302));
+}

@@ -623,6 +623,33 @@ record NominalSpanCheck { rest: decl.NominalTypeIdentityList, start: u64, end: u
 record NominalIdentityCheck { rest: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity, found: bool }
 record FunctionRecordFilter { rest: decl.ImportedRecordList, used: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList }
 record FunctionEnumFilter { rest: decl.ImportedEnumList, used: decl.NominalTypeIdentityList, acc: decl.ImportedEnumList }
+fn typed_finite_arms_empty_local(arms: decl.TypedFiniteMatchArmList) -> (result: bool) {
+    return match arms { decl.TypedFiniteMatchArmList.TFNil => true, decl.TypedFiniteMatchArmList.TFCons { head: h, tail: t } => false };
+}
+fn finite_cases_empty_local(cases: FiniteMatchCaseList) -> (result: bool) {
+    return match cases { FiniteMatchCaseList.MCNil => true, FiniteMatchCaseList.MCCons { head: h, tail: t } => false };
+}
+fn typed_scalar_arms_empty_local(arms: decl.TypedScalarMatchArmList) -> (result: bool) {
+    return match arms { decl.TypedScalarMatchArmList.TSNil => true, decl.TypedScalarMatchArmList.TSCons { head: h, tail: t } => false };
+}
+fn scalar_cases_empty_local(cases: ScalarMatchCaseList) -> (result: bool) {
+    return match cases { ScalarMatchCaseList.SCNil => true, ScalarMatchCaseList.SCCons { head: h, tail: t } => false };
+}
+fn value_stack_empty_local(stack: ValueStack) -> (result: bool) {
+    return match stack { ValueStack.WNil => true, ValueStack.WCons { head: h, tail: t } => false };
+}
+fn id_list_empty_local(ids: IdList) -> (result: bool) {
+    return match ids { IdList.INil => true, IdList.ICons { head: h, tail: t } => false };
+}
+fn payload_bindings_empty_local(bindings: decl.PayloadBindingList) -> (result: bool) {
+    return match bindings { decl.PayloadBindingList.YNil => true, decl.PayloadBindingList.YCons { head: h, tail: t } => false };
+}
+fn bind_list_empty_local(binds: decl.BindList) -> (result: bool) {
+    return match binds { decl.BindList.BNil => true, decl.BindList.BCons { head: h, tail: t } => false };
+}
+fn ssa_block_list_empty_local(blocks: SsaBlockList) -> (result: bool) {
+    return match blocks { SsaBlockList.LNil => true, SsaBlockList.LCons { head: h, tail: t } => false };
+}
 fn value_list_empty_local(values: ValueList) -> (result: bool) {
     return match values { VNil => true, VCons { head: h, tail: t } => false };
 }
@@ -635,25 +662,47 @@ fn imported_record_list_empty_local(records: decl.ImportedRecordList) -> (result
 fn imported_enum_list_empty_local(enums: decl.ImportedEnumList) -> (result: bool) {
     return match enums { decl.ImportedEnumList.IENil => true, decl.ImportedEnumList.IECons { head: h, tail: t } => false };
 }
-fn nominal_list_has_span_local(nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: NominalSpanCheck = NominalSpanCheck { rest: nominals, start: start, end: end, found: false } {
-        if st.found || nominal_list_empty_local(st.rest) { return st.found; }
-        next st = nominal_list_has_span_step(st);
-    }
-    return st.found;
-}
-fn nominal_list_has_span_step(st: NominalSpanCheck) -> (result: NominalSpanCheck) {
-    return match st.rest {
-        decl.NominalTypeIdentityList.NINil => st,
-        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => NominalSpanCheck { rest: rest, start: st.start, end: st.end, found: item.start == st.start && item.end == st.end }
+fn nominal_head_matches_span_local(nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    return match nominals {
+        decl.NominalTypeIdentityList.NINil => false,
+        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => item.start == start && item.end == end
     };
 }
-fn nominal_list_has_identity_local(nominals: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: bool) {
-    iterate i up_to 1024 carrying st: NominalIdentityCheck = NominalIdentityCheck { rest: nominals, wanted: wanted, found: false } {
-        if st.found || nominal_list_empty_local(st.rest) { return st.found; }
-        next st = nominal_list_has_identity_step(st);
+fn nominal_head_matches_identity_local(nominals: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    return match nominals {
+        decl.NominalTypeIdentityList.NINil => false,
+        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => decl.semantic_identity_equal(item.identity, wanted)
+    };
+}
+fn nominal_tail_local(nominals: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    return match nominals {
+        decl.NominalTypeIdentityList.NINil => decl.NominalTypeIdentityList.NINil,
+        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => rest
+    };
+}
+fn nominal_list_has_span_local(nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    iterate chunk up_to 64 carrying outer: decl.NominalTypeIdentityList = nominals {
+        iterate i up_to 1024 carrying rest: decl.NominalTypeIdentityList = outer {
+            if nominal_list_empty_local(rest) { return false; }
+            if nominal_head_matches_span_local(rest, start, end) { return true; }
+            next rest = nominal_tail_local(rest);
+        }
+        if nominal_list_empty_local(rest) { return false; }
+        next outer = rest;
     }
-    return st.found;
+    return false;
+}
+fn nominal_list_has_identity_local(nominals: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    iterate chunk up_to 64 carrying outer: decl.NominalTypeIdentityList = nominals {
+        iterate i up_to 1024 carrying rest: decl.NominalTypeIdentityList = outer {
+            if nominal_list_empty_local(rest) { return false; }
+            if nominal_head_matches_identity_local(rest, wanted) { return true; }
+            next rest = nominal_tail_local(rest);
+        }
+        if nominal_list_empty_local(rest) { return false; }
+        next outer = rest;
+    }
+    return false;
 }
 fn nominal_list_has_identity_step(st: NominalIdentityCheck) -> (result: NominalIdentityCheck) {
     return match st.rest {
@@ -798,7 +847,8 @@ fn nominal_identity_for_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 }
 record ConstructSourceCheck { fields: decl.ConstructFieldList, params: decl.BindList, ok: bool }
 fn enum_construct_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, nominals: decl.NominalTypeIdentityList, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: es, end: ee } => enum_construct_source_parts<P, N>(pages, stride, total, ty, nominals, variant_start, variant_end, params, start, end, ts, te, vs, ve, fields),
@@ -1230,7 +1280,13 @@ fn lower_finite_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     let source_args: IdList = append_ids<P, N>(pages, stride, total, IdList.ICons { head: Id { value: subject.id }, tail: IdList.INil }, match_context_ids<P, N>(pages, stride, total, st.env, base_stack));
     let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
     let initial: FiniteArmBuild = FiniteArmBuild { rest: arms, source: source, cases: FiniteMatchCaseList.MCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, nominal: nominal, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block: join_id + 1, ok: join_context.ok };
-    iterate i up_to 1024 carrying built: FiniteArmBuild = initial { next built = finite_arm_step<P, N>(pages, stride, total, built); }
+    iterate i up_to 1024 carrying built: FiniteArmBuild = initial {
+        if typed_finite_arms_empty_local(built.rest) { return finish_finite_match_subject<P, N>(pages, stride, total, st, rest, subject, subject_ty, nominal, result_ty, start, end, arm_count, join_id, built); }
+        next built = finite_arm_step<P, N>(pages, stride, total, built);
+    }
+    return finish_finite_match_subject<P, N>(pages, stride, total, st, rest, subject, subject_ty, nominal, result_ty, start, end, arm_count, join_id, built);
+}
+fn finish_finite_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, subject: Value, subject_ty: decl.SemType, nominal: decl.SemanticIdentity, result_ty: decl.SemType, start: u64, end: u64, arm_count: u64, join_id: u64, built: FiniteArmBuild) -> (result: ExprBuild) {
     let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<P, N>(pages, stride, total, built.cases);
     let source_term: Terminator = Terminator.FiniteSwitch { subject: subject.id, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, join_target: join_id, cases: ordered_cases };
     let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
@@ -1246,7 +1302,10 @@ fn finite_arm_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 }
 record MatchCaseReverse { rest: FiniteMatchCaseList, acc: FiniteMatchCaseList }
 fn reverse_finite_match_cases<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: FiniteMatchCaseList) -> (result: FiniteMatchCaseList) {
-    iterate i up_to 1024 carrying st: MatchCaseReverse = MatchCaseReverse { rest: cases, acc: FiniteMatchCaseList.MCNil } { next st = reverse_finite_match_cases_step(st); }
+    iterate i up_to 1024 carrying st: MatchCaseReverse = MatchCaseReverse { rest: cases, acc: FiniteMatchCaseList.MCNil } {
+        if finite_cases_empty_local(st.rest) { return st.acc; }
+        next st = reverse_finite_match_cases_step(st);
+    }
     return st.acc;
 }
 fn reverse_finite_match_cases_step(st: MatchCaseReverse) -> (result: MatchCaseReverse) {
@@ -1292,7 +1351,13 @@ fn lower_scalar_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     let source_args: IdList = match_context_ids<P, N>(pages, stride, total, st.env, base_stack);
     let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
     let initial: ScalarArmBuild = ScalarArmBuild { rest: arms, source: source, cases: ScalarMatchCaseList.SCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, default_target: 0, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block: join_id + 1, ok: join_context.ok };
-    iterate i up_to 1024 carrying built: ScalarArmBuild = initial { next built = scalar_arm_step<P, N>(pages, stride, total, built); }
+    iterate i up_to 1024 carrying built: ScalarArmBuild = initial {
+        if typed_scalar_arms_empty_local(built.rest) { return finish_scalar_match_subject<P, N>(pages, stride, total, st, rest, subject, subject_ty, result_ty, start, end, arm_count, join_id, built); }
+        next built = scalar_arm_step<P, N>(pages, stride, total, built);
+    }
+    return finish_scalar_match_subject<P, N>(pages, stride, total, st, rest, subject, subject_ty, result_ty, start, end, arm_count, join_id, built);
+}
+fn finish_scalar_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, start: u64, end: u64, arm_count: u64, join_id: u64, built: ScalarArmBuild) -> (result: ExprBuild) {
     let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<P, N>(pages, stride, total, built.cases);
     let source_term: Terminator = Terminator.ScalarSwitch { subject: subject.id, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, default_target: built.default_target, join_target: join_id, cases: ordered_cases };
     let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
@@ -1312,7 +1377,10 @@ fn scalar_arm_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 }
 record ScalarCaseReverse { rest: ScalarMatchCaseList, acc: ScalarMatchCaseList }
 fn reverse_scalar_match_cases<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: ScalarMatchCaseList) -> (result: ScalarMatchCaseList) {
-    iterate i up_to 1024 carrying st: ScalarCaseReverse = ScalarCaseReverse { rest: cases, acc: ScalarMatchCaseList.SCNil } { next st = reverse_scalar_match_cases_step(st); }
+    iterate i up_to 1024 carrying st: ScalarCaseReverse = ScalarCaseReverse { rest: cases, acc: ScalarMatchCaseList.SCNil } {
+        if scalar_cases_empty_local(st.rest) { return st.acc; }
+        next st = reverse_scalar_match_cases_step(st);
+    }
     return st.acc;
 }
 fn reverse_scalar_match_cases_step(st: ScalarCaseReverse) -> (result: ScalarCaseReverse) {
@@ -1338,7 +1406,10 @@ fn lower_scalar_arm<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
 }
 fn lower_nested_arm_ops<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, seed: ExprBuild) -> (result: ExprBuild) {
     let driver: NestDriver = NestDriver { build: seed, frames: NestFrameList.NFNil, done: false };
-    iterate i up_to 1024 carrying d: NestDriver = driver { next d = nest_driver_step<P, N>(pages, stride, total, d); }
+    iterate i up_to 1024 carrying d: NestDriver = driver {
+        if !(d.build.ok) || d.done { return nest_driver_result(d); }
+        next d = nest_driver_step<P, N>(pages, stride, total, d);
+    }
     return nest_driver_result(d);
 }
 fn nest_driver_result(st: NestDriver) -> (result: ExprBuild) {
@@ -1524,7 +1595,10 @@ fn match_context_parameters<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     let incoming: Incoming = Incoming { found: true, ok: true, count: 1, bindings: env };
     let env_params: BlockParamBuild = prepare_block_environment<P, N>(pages, stride, total, block, incoming, next_value, values, nominals);
     let initial: StackParamBuild = StackParamBuild { rest: stack, parameters_rev: env_params.params, stack_rev: ValueStack.WNil, values: env_params.values, next_value: env_params.next_value, index: env_params.parameter_index, block: block, nominals: nominals, ok: env_params.ok };
-    iterate i up_to 1024 carrying built: StackParamBuild = initial { next built = match_stack_parameter_step<P, N>(pages, stride, total, built); }
+    iterate i up_to 1024 carrying built: StackParamBuild = initial {
+        if value_stack_empty_local(built.rest) { return MatchContextBuild { env: env_params.env, stack: reverse_value_stack<P, N>(pages, stride, total, built.stack_rev), parameters: built.parameters_rev, values: built.values, next_value: built.next_value, parameter_index: built.index, block: block, nominals: nominals, ok: built.ok }; }
+        next built = match_stack_parameter_step<P, N>(pages, stride, total, built);
+    }
     return MatchContextBuild { env: env_params.env, stack: reverse_value_stack<P, N>(pages, stride, total, built.stack_rev), parameters: built.parameters_rev, values: built.values, next_value: built.next_value, parameter_index: built.index, block: block, nominals: nominals, ok: built.ok };
 }
 fn match_stack_parameter_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: StackParamBuild) -> (result: StackParamBuild) {
@@ -1538,14 +1612,20 @@ fn match_stack_parameter_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     return StackParamBuild { rest: rest, parameters_rev: ValueList.VCons { head: value, tail: st.parameters_rev }, stack_rev: ValueStack.WCons { head: value, tail: st.stack_rev }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, index: st.index + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<P, N>(pages, stride, total, old.ty, st.nominals) };
 }
 fn reverse_value_list<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList) -> (result: ValueList) {
-    iterate i up_to 1024 carrying st: ValueListReverse = ValueListReverse { rest: values, acc: ValueList.VNil } { next st = reverse_value_list_step(st); }
+    iterate i up_to 1024 carrying st: ValueListReverse = ValueListReverse { rest: values, acc: ValueList.VNil } {
+        if value_list_empty_local(st.rest) { return st.acc; }
+        next st = reverse_value_list_step(st);
+    }
     return st.acc;
 }
 fn reverse_value_list_step(st: ValueListReverse) -> (result: ValueListReverse) {
     return match st.rest { ValueList.VNil => st, ValueList.VCons { head: value, tail: rest } => ValueListReverse { rest: rest, acc: ValueList.VCons { head: value, tail: st.acc } } };
 }
 fn reverse_value_stack<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, stack: ValueStack) -> (result: ValueStack) {
-    iterate i up_to 1024 carrying st: ValueStackReverse = ValueStackReverse { rest: stack, acc: ValueStack.WNil } { next st = reverse_value_stack_step(st); }
+    iterate i up_to 1024 carrying st: ValueStackReverse = ValueStackReverse { rest: stack, acc: ValueStack.WNil } {
+        if value_stack_empty_local(st.rest) { return st.acc; }
+        next st = reverse_value_stack_step(st);
+    }
     return st.acc;
 }
 fn reverse_value_stack_step(st: ValueStackReverse) -> (result: ValueStackReverse) {
@@ -1554,7 +1634,10 @@ fn reverse_value_stack_step(st: ValueStackReverse) -> (result: ValueStackReverse
 record ValueListAppend { rest: ValueList, acc: ValueList }
 fn append_value<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, value: Value) -> (result: ValueList) {
     let reversed: ValueList = reverse_value_list<P, N>(pages, stride, total, values);
-    iterate i up_to 1024 carrying st: ValueListAppend = ValueListAppend { rest: reversed, acc: ValueList.VCons { head: value, tail: ValueList.VNil } } { next st = append_value_step(st); }
+    iterate i up_to 1024 carrying st: ValueListAppend = ValueListAppend { rest: reversed, acc: ValueList.VCons { head: value, tail: ValueList.VNil } } {
+        if value_list_empty_local(st.rest) { return st.acc; }
+        next st = append_value_step(st);
+    }
     return st.acc;
 }
 fn append_value_step(st: ValueListAppend) -> (result: ValueListAppend) {
@@ -1565,7 +1648,10 @@ fn match_context_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 }
 record StackIdBuild { rest: ValueStack, acc: IdList }
 fn value_stack_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, stack: ValueStack) -> (result: IdList) {
-    iterate i up_to 1024 carrying st: StackIdBuild = StackIdBuild { rest: stack, acc: IdList.INil } { next st = value_stack_id_step(st); }
+    iterate i up_to 1024 carrying st: StackIdBuild = StackIdBuild { rest: stack, acc: IdList.INil } {
+        if value_stack_empty_local(st.rest) { return reverse_id_list<P, N>(pages, stride, total, st.acc); }
+        next st = value_stack_id_step(st);
+    }
     return reverse_id_list<P, N>(pages, stride, total, st.acc);
 }
 fn value_stack_id_step(st: StackIdBuild) -> (result: StackIdBuild) {
@@ -1577,11 +1663,17 @@ fn append_id<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tot
 record IdListAppend { rest: IdList, acc: IdList }
 fn append_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, left: IdList, right: IdList) -> (result: IdList) {
     let reversed: IdList = reverse_id_list<P, N>(pages, stride, total, left);
-    iterate i up_to 1024 carrying st: IdListAppend = IdListAppend { rest: reversed, acc: right } { next st = append_id_step(st); }
+    iterate i up_to 1024 carrying st: IdListAppend = IdListAppend { rest: reversed, acc: right } {
+        if id_list_empty_local(st.rest) { return st.acc; }
+        next st = append_id_step(st);
+    }
     return st.acc;
 }
 fn reverse_id_list<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ids: IdList) -> (result: IdList) {
-    iterate i up_to 1024 carrying st: IdListReverse = IdListReverse { rest: ids, acc: IdList.INil } { next st = reverse_id_list_step(st); }
+    iterate i up_to 1024 carrying st: IdListReverse = IdListReverse { rest: ids, acc: IdList.INil } {
+        if id_list_empty_local(st.rest) { return st.acc; }
+        next st = reverse_id_list_step(st);
+    }
     return st.acc;
 }
 fn reverse_id_list_step(st: IdListReverse) -> (result: IdListReverse) {
@@ -1592,7 +1684,10 @@ fn append_id_step(st: IdListAppend) -> (result: IdListAppend) {
 }
 fn lower_match_payloads<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, bindings: decl.PayloadBindingList, fields: decl.BindList, env: Environment, subject: u64, variant_start: u64, variant_end: u64, nominal: decl.SemanticIdentity, match_start: u64, match_end: u64, instructions: InstructionList, values: ValueList, next_value: u64, next_instruction: u64, sequence: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool) -> (result: PayloadLowerBuild) {
     let initial: PayloadLowerBuild = PayloadLowerBuild { rest: bindings, fields: fields, env: env, subject: subject, variant_start: variant_start, variant_end: variant_end, nominal: nominal, match_start: match_start, match_end: match_end, instructions: instructions, values: values, next_value: next_value, next_instruction: next_instruction, sequence: sequence, block: block, nominals: nominals, ok: ok };
-    iterate i up_to 1024 carrying st: PayloadLowerBuild = initial { next st = lower_match_payload_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: PayloadLowerBuild = initial {
+        if !(st.ok) || payload_bindings_empty_local(st.rest) { return st; }
+        next st = lower_match_payload_step<P, N>(pages, stride, total, st);
+    }
     return st;
 }
 fn lower_match_payload_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: PayloadLowerBuild) -> (result: PayloadLowerBuild) {
@@ -2914,7 +3009,8 @@ fn verify_repeat_operand<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stri
     return id_list_empty(rest) && inst.argc == 1 && found.found && shape_ok && source_ok && decl.bind_list_empty(inst.params) && !(inst.identity.valid) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && inst.binding_start == 0 && inst.binding_end == 0 && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals);
 }
 fn repeat_source_count_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, expected: u64) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
         Repeat { value: value, count_start: count_start, count_end: count_end, count_kind: count_kind, start: repeat_start, end: repeat_end } => repeat_start == start && repeat_end == end && repeat_count_literal_matches<P, N>(pages, stride, total, count_kind, count_start, count_end, expected),
@@ -3172,7 +3268,8 @@ fn payload_declared_field_parameter<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_
     return resolved.ok && decl.sem_eq<P, N>(pages, stride, total, resolved.ty, parameter.ty) && decl.sem_eq<P, N>(pages, stride, total, resolved.ty, output_ty);
 }
 fn payload_extract_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
         FiniteMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && payload_source_arm_found<P, N>(pages, stride, total, arms, variant_start, variant_end, binding_start, binding_end, params),
@@ -3429,7 +3526,10 @@ fn op_result_shape_ok(slot: u64, ty: decl.SemType) -> (result: bool) {
 }
 record OpInputCheck { arguments: IdList, values: ValueList, nominals: decl.NominalTypeIdentityList, slot: u64, index: u64, ok: bool }
 fn op_inputs_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, arguments: IdList, slot: u64, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: OpInputCheck = OpInputCheck { arguments: arguments, values: values, nominals: nominals, slot: slot, index: 0, ok: true } { next st = op_input_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: OpInputCheck = OpInputCheck { arguments: arguments, values: values, nominals: nominals, slot: slot, index: 0, ok: true } {
+        if !(st.ok) || id_list_empty_local(st.arguments) { return st.ok && id_list_empty_local(st.arguments); }
+        next st = op_input_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && id_list_empty(st.arguments);
 }
 fn op_input_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: OpInputCheck) -> (result: OpInputCheck) {
@@ -3443,7 +3543,8 @@ fn op_input_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     return OpInputCheck { arguments: arguments, values: st.values, nominals: st.nominals, slot: st.slot, index: st.index + 1, ok: bad == 0 };
 }
 fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, slot: u64, ns: u64, ne: u64, argc: u64, start: u64, end: u64) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
         OpCall { slot: found, name_start: fns, name_end: fne, args: a, start: s, end: e } => found == slot && fns == ns && fne == ne && s == start && e == end && decl.count_exprs<P, N>(pages, stride, total, a) == argc,
@@ -3470,7 +3571,10 @@ fn verify_call_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 }
 record BindCount { rest: decl.BindList, count: u64 }
 fn bind_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, params: decl.BindList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: BindCount = BindCount { rest: params, count: 0 } { next st = bind_count_step(st); }
+    iterate i up_to 1024 carrying st: BindCount = BindCount { rest: params, count: 0 } {
+        if bind_list_empty_local(st.rest) { return st.count; }
+        next st = bind_count_step(st);
+    }
     return st.count;
 }
 fn bind_count_step(st: BindCount) -> (result: BindCount) {
@@ -3478,7 +3582,10 @@ fn bind_count_step(st: BindCount) -> (result: BindCount) {
 }
 record CallTypeCheck { arguments: IdList, params: decl.BindList, values: ValueList, ok: bool }
 fn call_argument_types_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, arguments: IdList, params: decl.BindList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: CallTypeCheck = CallTypeCheck { arguments: arguments, params: params, values: values, ok: true } { next st = call_argument_type_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: CallTypeCheck = CallTypeCheck { arguments: arguments, params: params, values: values, ok: true } {
+        if !(st.ok) || id_list_empty_local(st.arguments) { return st.ok && id_list_empty_local(st.arguments) && bind_list_empty(st.params); }
+        next st = call_argument_type_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && id_list_empty(st.arguments) && bind_list_empty(st.params);
 }
 fn bind_list_empty(params: decl.BindList) -> (result: bool) { return match params { BNil => true, BCons { head: h, tail: t } => false }; }
@@ -3516,7 +3623,10 @@ fn value_scan_step(st: ValueScan) -> (result: ValueScan) {
 fn id_list_empty(ids: IdList) -> (result: bool) { return match ids { INil => true, ICons { head: h, tail: t } => false }; }
 record IdCount { rest: IdList, count: u64 }
 fn id_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ids: IdList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: IdCount = IdCount { rest: ids, count: 0 } { next st = id_count_step(st); }
+    iterate i up_to 1024 carrying st: IdCount = IdCount { rest: ids, count: 0 } {
+        if id_list_empty_local(st.rest) { return st.count; }
+        next st = id_count_step(st);
+    }
     return st.count;
 }
 fn id_count_step(st: IdCount) -> (result: IdCount) { return match st.rest { INil => st, ICons { head: h, tail: t } => IdCount { rest: t, count: st.count + 1 } }; }
@@ -3740,7 +3850,8 @@ fn leftmost_match_atom<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     return current;
 }
 fn scalar_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, cases: ScalarMatchCaseList, count: u64) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start { return false; }
     let atom: decl.Expr = leftmost_match_atom<P, N>(pages, stride, total, parsed.node);
     return match atom {
@@ -3782,7 +3893,8 @@ fn scalar_match_source_pair_case(st: SourceScalarCasePair, arm: decl.ScalarMatch
     };
 }
 fn finite_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
-    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, total, start, true);
+    if end <= start || end > total { return false; }
+    let parsed: decl.ExprParse = decl.parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start { return false; }
     let atom: decl.Expr = leftmost_match_atom<P, N>(pages, stride, total, parsed.node);
     return match atom {
@@ -3847,7 +3959,10 @@ fn verify_edge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
 record BlockLookup { found: bool, block: SsaBlock }
 record BlockScan { rest: SsaBlockList, id: u64, found: bool, block: SsaBlock }
 fn find_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, id: u64) -> (result: BlockLookup) {
-    iterate i up_to 1024 carrying st: BlockScan = BlockScan { rest: blocks, id: id, found: false, block: SsaBlock { id: 0, parameters: ValueList.VNil, parameter_bindings: Environment.EnvNil, instructions: InstructionList.QNil, terminator: Terminator.Fail, reachable: false, has_failure_target: false, failure_target: 0, lowering_ok: false, lowering_failure_kind: 0 } } { next st = block_scan_step(st); }
+    iterate i up_to 1024 carrying st: BlockScan = BlockScan { rest: blocks, id: id, found: false, block: SsaBlock { id: 0, parameters: ValueList.VNil, parameter_bindings: Environment.EnvNil, instructions: InstructionList.QNil, terminator: Terminator.Fail, reachable: false, has_failure_target: false, failure_target: 0, lowering_ok: false, lowering_failure_kind: 0 } } {
+        if st.found || ssa_block_list_empty_local(st.rest) { return BlockLookup { found: st.found, block: st.block }; }
+        next st = block_scan_step(st);
+    }
     return BlockLookup { found: st.found, block: st.block };
 }
 fn block_scan_step(st: BlockScan) -> (result: BlockScan) {
@@ -3855,7 +3970,10 @@ fn block_scan_step(st: BlockScan) -> (result: BlockScan) {
     return match st.rest { LNil => st, LCons { head: h, tail: t } => BlockScan { rest: t, id: st.id, found: h.id == st.id, block: h } };
 }
 fn argument_types_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, args: IdList, params: ValueList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: ArgumentTypeCheck = ArgumentTypeCheck { args: args, params: params, values: values, ok: true } { next st = argument_type_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: ArgumentTypeCheck = ArgumentTypeCheck { args: args, params: params, values: values, ok: true } {
+        if !(st.ok) || id_list_empty_local(st.args) { return st.ok && id_list_empty_local(st.args) && value_list_empty(st.params); }
+        next st = argument_type_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && id_list_empty(st.args) && value_list_empty(st.params);
 }
 record ArgumentTypeCheck { args: IdList, params: ValueList, values: ValueList, ok: bool }

@@ -63,8 +63,31 @@ USE_CASES = (
     ("missing_semicolon", b"use alpha as beta", 32, 3, (False, 17, 17, 4, 9, 0, 0, False, 3)),
 )
 UNIT_CASES = (
-    ("valid_unit", b"mncs 0.19; module m; use a.b as c; record R { value: u64 } fn f(x: u64) -> (r: u64) { return x; }", 32),
-    ("malformed_declaration", b"mncs 0.19; module m; fn f(x: ) -> (r: u64) { return 0; }", 32),
+    (
+        "valid_unit",
+        b"mncs 0.19; module m; use a.b as c; record R { value: u64 } enum E { A, B { n: u64 } } fn f(x: R) -> (r: E) { return E.A; }",
+        32,
+    ),
+    (
+        "qualified_imported_type",
+        b"mncs 0.19; module m; use p.h as h; record U { k: h.Hdr } enum W { S { v: h.V } } fn g(x: h.Hdr) -> (r: U) { return x; }",
+        32,
+    ),
+    (
+        "page_split_inside_decl",
+        b"mncs 0.19; module m; record Box { item: u64 } fn id(x: Box) -> (r: Box) { return x; }",
+        23,
+    ),
+    (
+        "malformed_declaration",
+        b"mncs 0.19; module m; fn f(x: ) -> (r: u64) { return 0; }",
+        32,
+    ),
+    (
+        "malformed_split_decl",
+        b"mncs 0.19; module m; record Bad { x: }",
+        15,
+    ),
 )
 
 
@@ -101,7 +124,7 @@ def stage0_results(case):
             if expected is not None:
                 assert value == expected, (label, value, expected)
             else:
-                assert value["ok"] == (label == "valid_unit"), (label, value)
+                assert value["ok"] == (not label.startswith("malformed_")), (label, value)
             results[label] = (record["record"]["type_identity"], value)
         return results
     finally:
