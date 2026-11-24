@@ -12,6 +12,7 @@ import time
 from unittest.mock import patch
 
 import compiler_diagnosis
+import differential_evidence
 import native_vm_artifact
 import probe_compiler_module_frontier as frontier
 import test_native_segment_lex_batch_vm_emit as batch
@@ -39,9 +40,46 @@ fn call_parse_unit_signatures(pages: [[byte; up_to 32]; up_to 4], stride: u64, t
 }
 """
 UNIT_CALLER = "mncs:0.2:function:mncs.test.parse_unit_signatures_caller.v1::call_parse_unit_signatures"
+
+PARSE_UNIT_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.parse_unit_caller.v1;
+use mncs.compiler.decl.v1 as decl;
+
+fn call_parse_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) -> (result: decl.Unit) {
+    return decl.parse_unit<4, 32>(pages, stride, total);
+}
+"""
+PARSE_UNIT_CALLER = "mncs:0.2:function:mncs.test.parse_unit_caller.v1::call_parse_unit"
+
+CHECK_UNIT_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.check_unit_caller.v1;
+use mncs.compiler.decl.v1 as decl;
+
+fn call_check_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) -> (result: decl.UnitCheck) {
+    return decl.check_unit<4, 32>(pages, stride, total);
+}
+"""
+CHECK_UNIT_CALLER = "mncs:0.2:function:mncs.test.check_unit_caller.v1::call_check_unit"
+
+PROVE_UNIT_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.prove_unit_caller.v1;
+use mncs.compiler.decl.v1 as decl;
+
+fn call_prove_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) -> (result: decl.UnitProve) {
+    return decl.prove_unit<4, 32>(pages, stride, total);
+}
+"""
+PROVE_UNIT_CALLER = "mncs:0.2:function:mncs.test.prove_unit_caller.v1::call_prove_unit"
+
 DECLARATION_CASES = {
     "parse_use": (batch.TARGET_PARSE_USE_CALLER, batch.PARSE_USE_CALLER_SRC),
     "parse_unit_signatures": (UNIT_CALLER, UNIT_CALLER_SRC),
+    "parse_unit": (PARSE_UNIT_CALLER, PARSE_UNIT_CALLER_SRC),
+    "check_unit": (CHECK_UNIT_CALLER, CHECK_UNIT_CALLER_SRC),
+    "prove_unit": (PROVE_UNIT_CALLER, PROVE_UNIT_CALLER_SRC),
 }
 
 USE_FIELDS = (
@@ -91,16 +129,92 @@ UNIT_CASES = (
 )
 
 
+PARSE_UNIT_CASES = (
+    (
+        "valid_nonempty_body",
+        b"mncs 0.19; module m; fn add1(x: u64) -> (r: u64) { let y: u64 = x + 1; return y; }",
+        32,
+    ),
+    (
+        "page_split_inside_expr",
+        b"mncs 0.19; module m; fn calc(x: u64) -> (r: u64) { let y: u64 = (x + 10) * 2; return y; }",
+        23,
+    ),
+    (
+        "malformed_body",
+        b"mncs 0.19; module m; fn bad(x: u64) -> (r: u64) { let y: u64 = x + ; return y; }",
+        32,
+    ),
+)
+CHECK_UNIT_VALID_LOCAL_CALL_RAW = (
+    b"mncs 0.19; module m; fn inc(x: u64) -> (r: u64) { return x + 1; } "
+    b"fn main(a: u64) -> (r: u64) { return inc(a); }"
+)
+CHECK_UNIT_CASES = (
+    ("valid_local_call", CHECK_UNIT_VALID_LOCAL_CALL_RAW, 32),
+    ("valid_local_call_layout_2", CHECK_UNIT_VALID_LOCAL_CALL_RAW, 28),
+    (
+        "duplicate_fn_name",
+        b"mncs 0.19; module m; fn f(x: u64) -> (r: u64) { return x; } fn f(y: u64) -> (r: u64) { return y; }",
+        32,
+    ),
+    (
+        "unresolved_reference",
+        b"mncs 0.19; module m; fn main(a: u64) -> (r: u64) { return missing(a); }",
+        32,
+    ),
+    (
+        "malformed_syntax",
+        b"mncs 0.19; module m; fn bad(x: u64) -> (r: u64) { return x + ; }",
+        32,
+    ),
+)
+PROVE_UNIT_CASES = (
+    (
+        "valid_unit",
+        b"mncs 0.19; module m; fn id(x: u64) -> (r: u64) { return x; }",
+        32,
+    ),
+    (
+        "semantically_invalid_unit",
+        b"mncs 0.19; module m; fn bad(x: u64) -> (r: bool) { return x; }",
+        32,
+    ),
+)
+UNIT_CHECK_FIELDS = ("ok", "stage", "err_start", "err_end", "fn_count", "expr_count", "ir_ok")
+
+
+def expected_record_name(case):
+    if case == "parse_use":
+        return "UseDecl"
+    if case in ("parse_unit_signatures", "parse_unit"):
+        return "Unit"
+    if case == "check_unit":
+        return "UnitCheck"
+    if case == "prove_unit":
+        return "UnitProve"
+    raise ValueError(f"unsupported declaration case {case}")
+
+
 def execution_cases(case):
-    fixtures = (
-        ((label, raw, stride, [cursor], dict(zip(USE_FIELDS, values)))
-         for label, raw, stride, cursor, values in USE_CASES)
-        if case == "parse_use"
-        else ((label, raw, stride, [], None) for label, raw, stride in UNIT_CASES)
-    )
+    if case == "parse_use":
+        fixtures = (
+            (label, raw, stride, [cursor], dict(zip(USE_FIELDS, values)))
+            for label, raw, stride, cursor, values in USE_CASES
+        )
+    elif case == "parse_unit_signatures":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in UNIT_CASES)
+    elif case == "parse_unit":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in PARSE_UNIT_CASES)
+    elif case == "check_unit":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in CHECK_UNIT_CASES)
+    elif case == "prove_unit":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in PROVE_UNIT_CASES)
+    else:
+        raise ValueError(f"unsupported declaration case {case}")
     for label, raw, stride, extra, expected in fixtures:
         pages = project.chunk(raw, stride)
-        assert len(pages) <= 4 and stride <= 32
+        assert len(pages) <= 4 and stride <= 32, (label, len(pages), stride, len(raw))
         args = [project.pages_value(pages), project.integer(stride), project.integer(len(raw))]
         yield label, stride, args + [project.integer(value) for value in extra], expected
 
@@ -123,8 +237,11 @@ def stage0_results(case):
             value = sem.decode(record)
             if expected is not None:
                 assert value == expected, (label, value, expected)
-            else:
+            elif case in ("parse_unit_signatures", "parse_unit"):
                 assert value["ok"] == (not label.startswith("malformed_")), (label, value)
+            elif case == "check_unit":
+                assert set(UNIT_CHECK_FIELDS).issubset(value.keys()), (label, value)
+                assert value["ok"] == label.startswith("valid_"), (label, value)
             results[label] = (record["record"]["type_identity"], value)
         return results
     finally:
@@ -136,12 +253,14 @@ def run_execution(case, target, artifact_path):
     module, function = target.removeprefix("mncs:0.2:function:").split("::")
     vm = batch.single_emit.FreshVmSession(artifact_path)
     results = {}
+    expected_labels = []
     try:
         for label, stride, args, _ in execution_cases(case):
+            expected_labels.append(label)
             response = vm.call(module, function, args)
             assert response["outcome"]["kind"] == "completed", (label, response)
             returned = response["execution"]["returned"][0]
-            name = "UseDecl" if case == "parse_use" else "Unit"
+            name = expected_record_name(case)
             assert returned["record"]["name"] == name, (label, returned)
             oracle_identity, oracle_value = oracle[label]
             assert returned["record"]["type_identity"] == oracle_identity, (label, returned, oracle_identity)
@@ -149,13 +268,27 @@ def run_execution(case, target, artifact_path):
             assert value == oracle_value, (label, value, oracle_value)
             usage = response["record"]["usage"]
             results[label] = {
-                "stride": stride, "returned": value, "matches_stage0": True,
-                "steps": usage["steps"], "max_memory_cells": usage["max_memory_cells"],
+                "stride": stride,
+                "type_identity": returned["record"]["type_identity"],
+                "returned": value,
+                "matches_stage0": True,
+                "steps": usage["steps"],
+                "max_memory_cells": usage["max_memory_cells"],
             }
+        if case == "check_unit":
+            assert results["valid_local_call"]["returned"] == results["valid_local_call_layout_2"]["returned"], (
+                results["valid_local_call"]["returned"],
+                results["valid_local_call_layout_2"]["returned"],
+            )
     finally:
         vm.close()
+    case_summary = differential_evidence.summarize_differential_cases(expected_labels, results)
+    assert case_summary["all_expected_match_stage0"], case_summary
     return {
-        "status": "returned", "cases": results, "vm_peak_rss_bytes": vm.peak_rss_bytes,
+        "status": "returned",
+        "cases": results,
+        "case_summary": case_summary,
+        "vm_peak_rss_bytes": vm.peak_rss_bytes,
         "max_memory_cells": max(result["max_memory_cells"] for result in results.values()),
     }
 

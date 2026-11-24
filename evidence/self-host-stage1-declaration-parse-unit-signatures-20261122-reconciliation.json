@@ -1,0 +1,78 @@
+{
+  "schema": "mncs.self-host.evidence-reconciliation/1",
+  "recorded_at_utc": "2026-11-23T22:00:00Z",
+  "reconciled_evidence": "evidence/self-host-stage1-declaration-parse-unit-signatures-20261122.json",
+  "reconciled_commit": "7dc49e462a201d59a7988928442b9285bd2ad0ca",
+  "findings": {
+    "aggregate_flag_discrepancy": {
+      "previous_field": "step3_unit_passthrough_and_real_parse_unit_signatures.parse_unit_signatures_4_32.all_5_cases_match_locked_stage0",
+      "previous_value": false,
+      "corrected_value": true,
+      "root_cause": "The ad-hoc packaging script checked `parse_unit_run1[\"probe_status\"] == \"executed\"`, whereas `tools/test_native_decl_vm_emit.py` records `probe_status == \"returned\"` (and `execution.status == \"returned\"`). All five underlying execution cases had `matches_stage0: true`.",
+      "derived_case_summary": {
+        "status": "passed",
+        "all_expected_match_stage0": true,
+        "expected_count": 5,
+        "observed_count": 5,
+        "passed_count": 5,
+        "passed_cases": [
+          "valid_unit",
+          "qualified_imported_type",
+          "page_split_inside_decl",
+          "malformed_declaration",
+          "malformed_split_decl"
+        ],
+        "failed_cases": [],
+        "missing_cases": [],
+        "duplicate_cases": [],
+        "unexpected_cases": []
+      },
+      "reused_underlying_receipt": true
+    },
+    "ambient_diagnosis_capture_discrepancy": {
+      "previous_field": "step4_ambient_environment_and_outstanding_regressions.environment_entry_verification.selected_callable_diagnosis",
+      "previous_value": null,
+      "root_cause": "The ad-hoc packaging script read `env_enter2.get(\"selected_callable_diagnosis\")` instead of Environment's actual projection path `env_enter2[\"diagnostic\"][\"compiler_investigation\"]`. The receipt and Environment projection were intact.",
+      "recovered_compiler_investigation": {
+        "present": true,
+        "source_path": "diagnostic.compiler_investigation",
+        "status": "executed",
+        "freshness": "current",
+        "reused": true,
+        "delivery_completeness": "complete",
+        "target": "mncs:0.2:function:mncs.test.parse_unit_signatures_caller.v1::call_parse_unit_signatures",
+        "revision": "37a078ce40cf",
+        "specialization": null,
+        "last_completed_phase": "execution",
+        "failing_phase": null,
+        "artifact_id": null,
+        "measurements": {
+          "heavyweight_compile_launched": false,
+          "provider_launches": 0
+        },
+        "raw": {
+          "delivery_completeness": "complete",
+          "freshness": "current",
+          "measurements": {
+            "heavyweight_compile_launched": false,
+            "provider_launches": 0
+          },
+          "provenance": {
+            "compiler": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+            "last_completed_phase": "execution",
+            "revision": "37a078ce40cf",
+            "target": "mncs:0.2:function:mncs.test.parse_unit_signatures_caller.v1::call_parse_unit_signatures"
+          },
+          "reused": true,
+          "status": "executed",
+          "unavailable_providers": []
+        }
+      }
+    }
+  },
+  "remediation": {
+    "helper_module": "tools/differential_evidence.py",
+    "focused_tests": "tools/test_differential_evidence.py",
+    "tests_passed": 6
+  }
+}

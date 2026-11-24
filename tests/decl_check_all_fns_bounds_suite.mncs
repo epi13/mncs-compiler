@@ -1,0 +1,132 @@
+mncs 0.18;
+module tests.compiler_decl_check_all_fns_bounds;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+fn valid_ok_fn() -> (result: decl.FnDecl) {
+    let sig: decl.FnSig = decl.FnSig {
+        name_start: 24, name_end: 26,
+        generics: decl.GenericParamList.GNil,
+        params: decl.FieldList.FNil,
+        results: decl.FieldList.FNil,
+        contracts: decl.ClauseList.CNil,
+        effects: decl.EffectList.XNil,
+        capabilities: decl.CapList.ANil
+    };
+    let body: decl.FnBody = decl.FnBody {
+        body: decl.StmtList.SNil,
+        ret: decl.Expr.Integer { start: 49, end: 50, value: 0, overflow: false },
+        has_ret: true
+    };
+    return decl.FnDecl {
+        ok: true, err_start: 0, err_end: 0, sig: sig, body: body,
+        fn_start: 21, fn_end: 53, cursor: 53
+    };
+}
+
+fn final_bad_fn() -> (result: decl.FnDecl) {
+    let sig: decl.FnSig = decl.FnSig {
+        name_start: 57, name_end: 60,
+        generics: decl.GenericParamList.GNil,
+        params: decl.FieldList.FNil,
+        results: decl.FieldList.FNil,
+        contracts: decl.ClauseList.CNil,
+        effects: decl.EffectList.XNil,
+        capabilities: decl.CapList.ANil
+    };
+    let bad_call: decl.Expr = decl.Expr.Call {
+        name_start: 83, name_end: 90,
+        args: decl.ExprList.ENil,
+        targs: decl.TypeArgList.TNil,
+        start: 83, end: 92
+    };
+    let body: decl.FnBody = decl.FnBody {
+        body: decl.StmtList.SNil,
+        ret: bad_call,
+        has_ret: true
+    };
+    return decl.FnDecl {
+        ok: true, err_start: 0, err_end: 0, sig: sig, body: body,
+        fn_start: 54, fn_end: 95, cursor: 95
+    };
+}
+
+fn cons8_fns(stub: decl.FnDecl, acc: decl.FnList) -> (result: decl.FnList) {
+    let a1: decl.FnList = decl.FnList.DCons { head: stub, tail: acc };
+    let a2: decl.FnList = decl.FnList.DCons { head: stub, tail: a1 };
+    let a3: decl.FnList = decl.FnList.DCons { head: stub, tail: a2 };
+    let a4: decl.FnList = decl.FnList.DCons { head: stub, tail: a3 };
+    let a5: decl.FnList = decl.FnList.DCons { head: stub, tail: a4 };
+    let a6: decl.FnList = decl.FnList.DCons { head: stub, tail: a5 };
+    let a7: decl.FnList = decl.FnList.DCons { head: stub, tail: a6 };
+    return decl.FnList.DCons { head: stub, tail: a7 };
+}
+
+fn prepend_1024_ok_fns(tail: decl.FnList) -> (result: decl.FnList) {
+    let stub: decl.FnDecl = valid_ok_fn();
+    iterate i up_to 32 carrying acc: decl.FnList = tail {
+        let b1: decl.FnList = cons8_fns(stub, acc);
+        let b2: decl.FnList = cons8_fns(stub, b1);
+        let b3: decl.FnList = cons8_fns(stub, b2);
+        next acc = cons8_fns(stub, b3);
+    }
+    return acc;
+}
+
+fn sample_pages() -> (result: [[byte; up_to 32]; up_to 4]) {
+    // Minimal 96-byte source where bytes [24..26] = "ok", [57..60] = "bad", [83..90] = "missing".
+    // Only byte length and name spans are read by check_all_fns / spans_equal.
+    let p0: [byte; up_to 32] = [
+        109, 110, 99, 115, 32, 48, 46, 49, 57, 59, 32, 109, 111, 100, 117, 108,
+        101, 32, 109, 59, 32, 102, 110, 32, 111, 107, 40, 41, 32, 45, 62, 32
+    ];
+    let p1: [byte; up_to 32] = [
+        40, 114, 58, 32, 117, 54, 52, 41, 32, 123, 32, 114, 101, 116, 117, 114,
+        110, 32, 48, 59, 32, 125, 32, 102, 110, 32, 98, 97, 100, 40, 41, 32
+    ];
+    let p2: [byte; up_to 32] = [
+        45, 62, 32, 40, 114, 58, 32, 117, 54, 52, 41, 32, 123, 32, 114, 101,
+        116, 117, 114, 110, 32, 109, 105, 115, 115, 105, 110, 103, 40, 41, 59, 32
+    ];
+    let p3: [byte; up_to 32] = [125];
+    return [p0, p1, p2, p3];
+}
+
+test check_all_fns_visits_final_bad_fn_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 32]; up_to 4] = sample_pages();
+    let total: u64 = 97;
+    let names: decl.NameList = decl.NameList.NCons {
+        head: decl.NameSpan { start: 24, end: 26 },
+        tail: decl.NameList.NCons {
+            head: decl.NameSpan { start: 57, end: 60 },
+            tail: decl.NameList.NNil
+        }
+    };
+    let tail_bad: decl.FnList = decl.FnList.DCons {
+        head: final_bad_fn(),
+        tail: decl.FnList.DNil
+    };
+    let fns_1025: decl.FnList = prepend_1024_ok_fns(tail_bad);
+    let rep: decl.FnsReport = decl.check_all_fns<4, 32>(pages, 32, total, fns_1025, names);
+    let caught: bool = !(rep.ok) && rep.fn_count == 1024 && rep.bad_start == 83 && rep.bad_end == 90;
+    return from_assertion(equals_bool(true, caught, 7401));
+}
+
+test check_all_fns_accepts_1025_valid_fns_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 32]; up_to 4] = sample_pages();
+    let total: u64 = 97;
+    let names: decl.NameList = decl.NameList.NCons {
+        head: decl.NameSpan { start: 24, end: 26 },
+        tail: decl.NameList.NNil
+    };
+    let tail_ok: decl.FnList = decl.FnList.DCons {
+        head: valid_ok_fn(),
+        tail: decl.FnList.DNil
+    };
+    let fns_1025: decl.FnList = prepend_1024_ok_fns(tail_ok);
+    let rep: decl.FnsReport = decl.check_all_fns<4, 32>(pages, 32, total, fns_1025, names);
+    let all_ok: bool = rep.ok && rep.fn_count == 1025;
+    return from_assertion(equals_bool(true, all_ok, 7402));
+}

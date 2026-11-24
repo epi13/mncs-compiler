@@ -2752,6 +2752,53 @@
           "invalidation_identity"
         ]
       }
+    },
+    {
+      "identity": "mncs-compiler.decl-check-all-fns-bounds-native",
+      "title": "First-class check_all_fns walk visits the final function past 1,024 functions and reports errors without skipping",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::check_all_fns",
+        "mncs:0.2:function:mncs.compiler.decl.v1::check_unit"
+      ],
+      "invalidation_dependencies": [
+        "tests/decl_check_all_fns_bounds_suite.mncs",
+        "src/compiler/decl.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/decl_check_all_fns_bounds_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
     }
   ]
 }

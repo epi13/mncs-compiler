@@ -3872,10 +3872,15 @@ fn span_eq_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
 // then restored like every other list here).
 record FnNameAcc { rest: FnList, acc: NameList }
 fn collect_fn_names<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: FnList) -> (result: NameList) {
-    iterate i up_to 1024 carrying d: FnNameAcc = FnNameAcc { rest: fns, acc: NameList.NNil } {
-        next d = collect_fn_names_step(d);
+    iterate chunk up_to 64 carrying outer: FnNameAcc = FnNameAcc { rest: fns, acc: NameList.NNil } {
+        iterate i up_to 1024 carrying inner: FnNameAcc = outer {
+            if declared_fn_list_empty(inner.rest) { return reverse_names<P, N>(pages, stride, total, inner.acc); }
+            next inner = collect_fn_names_step(inner);
+        }
+        if declared_fn_list_empty(inner.rest) { return reverse_names<P, N>(pages, stride, total, inner.acc); }
+        next outer = inner;
     }
-    return reverse_names<P, N>(pages, stride, total, d.acc);
+    return reverse_names<P, N>(pages, stride, total, outer.acc);
 }
 fn collect_fn_names_step(st: FnNameAcc) -> (result: FnNameAcc) {
     return match st.rest {
@@ -3889,11 +3894,15 @@ fn collect_fn_names_cons(st: FnNameAcc, h: FnDecl, t: FnList) -> (result: FnName
 }
 record NameRev { rest: NameList, acc: NameList }
 fn reverse_names<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: NameList) -> (result: NameList) {
-    iterate i up_to 1024 carrying d: NameRev = NameRev { rest: list, acc: NameList.NNil } {
-        if name_list_empty(d.rest) { return d.acc; }
-        next d = reverse_names_step(d);
+    iterate chunk up_to 64 carrying outer: NameRev = NameRev { rest: list, acc: NameList.NNil } {
+        iterate i up_to 1024 carrying inner: NameRev = outer {
+            if name_list_empty(inner.rest) { return inner.acc; }
+            next inner = reverse_names_step(inner);
+        }
+        if name_list_empty(inner.rest) { return inner.acc; }
+        next outer = inner;
     }
-    return d.acc;
+    return outer.acc;
 }
 fn reverse_names_step(st: NameRev) -> (result: NameRev) {
     return match st.rest { NNil => st, NCons { head: h, tail: t } => NameRev { rest: t, acc: NameList.NCons { head: h, tail: st.acc } } };
@@ -3902,11 +3911,15 @@ fn reverse_names_step(st: NameRev) -> (result: NameRev) {
 // Membership of a span in a name list by exact bytes.
 record KnownState { rest: NameList, start: u64, end: u64, found: bool }
 fn name_known<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: NameList, start: u64, end: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying d: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
-        if d.found || name_list_empty(d.rest) { return d.found; }
-        next d = name_known_step<P, N>(pages, stride, total, d);
+    iterate chunk up_to 64 carrying outer: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
+        iterate i up_to 1024 carrying inner: KnownState = outer {
+            if inner.found || name_list_empty(inner.rest) { return inner.found; }
+            next inner = name_known_step<P, N>(pages, stride, total, inner);
+        }
+        if inner.found || name_list_empty(inner.rest) { return inner.found; }
+        next outer = inner;
     }
-    return d.found;
+    return outer.found;
 }
 fn name_known_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: KnownState) -> (result: KnownState) {
     return match st.rest {
@@ -3919,10 +3932,15 @@ fn name_known_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 record DupState { rest: NameList, seen: NameList, found: bool, start: u64, end: u64 }
 record DupReport { found: bool, start: u64, end: u64 }
 fn duplicate_fn_names<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, names: NameList) -> (result: DupReport) {
-    iterate i up_to 1024 carrying d: DupState = DupState { rest: names, seen: NameList.NNil, found: false, start: 0, end: 0 } {
-        next d = duplicate_fn_names_step<P, N>(pages, stride, total, d);
+    iterate chunk up_to 64 carrying outer: DupState = DupState { rest: names, seen: NameList.NNil, found: false, start: 0, end: 0 } {
+        iterate i up_to 1024 carrying inner: DupState = outer {
+            if inner.found || name_list_empty(inner.rest) { return DupReport { found: inner.found, start: inner.start, end: inner.end }; }
+            next inner = duplicate_fn_names_step<P, N>(pages, stride, total, inner);
+        }
+        if inner.found || name_list_empty(inner.rest) { return DupReport { found: inner.found, start: inner.start, end: inner.end }; }
+        next outer = inner;
     }
-    return DupReport { found: d.found, start: d.start, end: d.end };
+    return DupReport { found: outer.found, start: outer.start, end: outer.end };
 }
 fn duplicate_fn_names_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: DupState) -> (result: DupState) {
     return match st.rest {
@@ -3948,11 +3966,42 @@ fn duplicate_fn_names_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 record WalkState { swords: StmtList, work: ExprList, acc: ExprList, names: NameList, total: u64, ok: bool, bad_start: u64, bad_end: u64 }
 record BodyReport { ok: bool, bad_start: u64, bad_end: u64, exprs: ExprList }
 fn check_body<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, body: StmtList, ret: Expr, names: NameList) -> (result: BodyReport) {
-
+    if stmt_list_empty(body) {
+        let fast: BodyReport = check_body_fast_ret(total, ret);
+        if fast.ok { return fast; }
+    }
     iterate i up_to 1024 carrying d: WalkState = WalkState { swords: body, work: ExprList.ECons { head: ret, tail: ExprList.ENil }, acc: ExprList.ENil, names: names, total: total, ok: true, bad_start: 0, bad_end: 0 } {
+        if !(d.ok) || (stmt_list_empty(d.swords) && expr_list_empty(d.work)) { return walk_report(d); }
         next d = walk_step<P, N>(pages, stride, total, d);
     }
     return walk_report(d);
+}
+fn check_body_fast_ret(total: u64, ret: Expr) -> (result: BodyReport) {
+    return match ret {
+        Integer { start: s, end: e, value: v, overflow: ov } => check_body_fast_lit(total, s, e, ret),
+        Boolean { start: s, end: e, value: v } => check_body_fast_lit(total, s, e, ret),
+        Name { start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        UnaryNot { value: x, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Repeat { value: x, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        ScalarMatch { subject: sub, arms: ar, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Binary { op: o, left: l, right: r, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        FiniteMatch { subject: sub, arms: ar, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        OpCall { slot: sl, name_start: ns, name_end: ne, args: a, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: f, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Index { base: b, index: ix, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Cast { value: x, type_start: ts, type_end: te, type_kind: tk, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        Slice { base: b, start_index: si, end_index: ei, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil },
+        SequenceLiteral { elements: xs, start: s, end: e } => BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil }
+    };
+}
+fn check_body_fast_lit(total: u64, s: u64, e: u64, ret: Expr) -> (result: BodyReport) {
+    if s <= e && e <= total {
+        return BodyReport { ok: true, bad_start: 0, bad_end: 0, exprs: ExprList.ECons { head: ret, tail: ExprList.ENil } };
+    }
+    return BodyReport { ok: false, bad_start: 0, bad_end: 0, exprs: ExprList.ENil };
 }
 fn walk_report(st: WalkState) -> (result: BodyReport) {
     if !(st.ok) { return BodyReport { ok: false, bad_start: st.bad_start, bad_end: st.bad_end, exprs: ExprList.ENil }; }
@@ -4096,6 +4145,7 @@ record StmtPrepend { rest: StmtList, acc: StmtList }
 fn append_stmts<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: StmtList, second: StmtList) -> (result: StmtList) {
     let rev: StmtList = reverse_stmts<P, N>(pages, stride, total, first);
     iterate i up_to 1024 carrying d: StmtPrepend = StmtPrepend { rest: rev, acc: second } {
+        if stmt_list_empty(d.rest) { return d.acc; }
         next d = append_stmts_step(d);
     }
     return d.acc;
@@ -4105,8 +4155,16 @@ fn append_stmts_step(st: StmtPrepend) -> (result: StmtPrepend) {
 }
 record ExprPrepend { rest: ExprList, acc: ExprList }
 fn append_exprs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: ExprList, second: ExprList) -> (result: ExprList) {
-    let rev: ExprList = reverse_exprs<P, N>(pages, stride, total, first);
+    return match first {
+        ENil => second,
+        ECons { head: h, tail: t } => append_exprs_nonempty<P, N>(pages, stride, total, h, t, second)
+    };
+}
+fn append_exprs_nonempty<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, h: Expr, t: ExprList, second: ExprList) -> (result: ExprList) {
+    if expr_list_empty(t) { return ExprList.ECons { head: h, tail: second }; }
+    let rev: ExprList = reverse_exprs<P, N>(pages, stride, total, ExprList.ECons { head: h, tail: t });
     iterate i up_to 1024 carrying d: ExprPrepend = ExprPrepend { rest: rev, acc: second } {
+        if expr_list_empty(d.rest) { return d.acc; }
         next d = append_exprs_step(d);
     }
     return d.acc;
@@ -4323,11 +4381,17 @@ fn check_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
     return UnitCheck { ok: true, err_start: 0, err_end: 0, stage: 4, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: true };
 }
 fn check_all_fns<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: FnList, names: NameList) -> (result: FnsReport) {
-
-    iterate i up_to 1024 carrying d: FnsState = FnsState { rest: fns, names: names, total: total, ok: true, bad_start: 0, bad_end: 0, fn_count: 0, exprs: ExprList.ENil } {
-        next d = check_fns_step<P, N>(pages, stride, total, d);
+    iterate chunk up_to 64 carrying outer: FnsState = FnsState { rest: fns, names: names, total: total, ok: true, bad_start: 0, bad_end: 0, fn_count: 0, exprs: ExprList.ENil } {
+        iterate i up_to 1024 carrying inner: FnsState = outer {
+            if !(inner.ok) || declared_fn_list_empty(inner.rest) { return FnsReport { ok: inner.ok, bad_start: inner.bad_start, bad_end: inner.bad_end, fn_count: inner.fn_count, exprs: inner.exprs }; }
+            next inner = check_fns_step<P, N>(pages, stride, total, inner);
+        }
+        if !(inner.ok) || declared_fn_list_empty(inner.rest) { return FnsReport { ok: inner.ok, bad_start: inner.bad_start, bad_end: inner.bad_end, fn_count: inner.fn_count, exprs: inner.exprs }; }
+        next outer = inner;
     }
-    return FnsReport { ok: d.ok, bad_start: d.bad_start, bad_end: d.bad_end, fn_count: d.fn_count, exprs: d.exprs };
+    if !(outer.ok) { return FnsReport { ok: false, bad_start: outer.bad_start, bad_end: outer.bad_end, fn_count: outer.fn_count, exprs: outer.exprs }; }
+    if !(declared_fn_list_empty(outer.rest)) { return FnsReport { ok: false, bad_start: total, bad_end: total, fn_count: outer.fn_count, exprs: ExprList.ENil }; }
+    return FnsReport { ok: true, bad_start: 0, bad_end: 0, fn_count: outer.fn_count, exprs: outer.exprs };
 }
 fn check_fns_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnsState) -> (result: FnsState) {
 
@@ -4345,10 +4409,16 @@ fn check_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     return FnsState { rest: t, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0, fn_count: st.fn_count + 1, exprs: append_exprs<P, N>(pages, stride, total, rep.exprs, st.exprs) };
 }
 fn verify_ir_exprs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, exprs: ExprList) -> (result: IrReport) {
-    iterate i up_to 1024 carrying d: IrState = IrState { rest: exprs, ok: true, count: 0 } {
-        next d = verify_ir_step<P, N>(pages, stride, total, d);
+    iterate chunk up_to 64 carrying outer: IrState = IrState { rest: exprs, ok: true, count: 0 } {
+        iterate i up_to 1024 carrying inner: IrState = outer {
+            if !(inner.ok) || expr_list_empty(inner.rest) { return IrReport { ok: inner.ok, count: inner.count }; }
+            next inner = verify_ir_step<P, N>(pages, stride, total, inner);
+        }
+        if !(inner.ok) || expr_list_empty(inner.rest) { return IrReport { ok: inner.ok, count: inner.count }; }
+        next outer = inner;
     }
-    return IrReport { ok: d.ok, count: d.count };
+    if !(outer.ok) || !(expr_list_empty(outer.rest)) { return IrReport { ok: false, count: outer.count }; }
+    return IrReport { ok: true, count: outer.count };
 }
 fn verify_ir_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: IrState) -> (result: IrState) {
     if !(st.ok) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
