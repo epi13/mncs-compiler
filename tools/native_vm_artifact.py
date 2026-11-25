@@ -342,6 +342,18 @@ def _vm_inst_kind(inst, record_names=None, finite_names=None, rec_by_index=None,
                 "discriminant": int(inst["op_code"]),
             }
         }
+    if opcode == 23:
+        seq_ty = _body_type(inst["ty"], record_names, finite_names, rec_by_index, fin_by_index)
+        assert isinstance(seq_ty, dict) and "sequence" in seq_ty and "exact" in seq_ty["sequence"]["bound"], (
+            f"SequenceReplace must produce exact sequence type: {seq_ty}"
+        )
+        return {
+            "SequenceReplace": {
+                "element_type": seq_ty["sequence"]["element"],
+                "bound": seq_ty["sequence"]["bound"],
+                "evidence": {"runtime_checked": {"failure": "isolated"}},
+            }
+        }
     raise ValueError(f"unsupported VmInstruction opcode: {opcode}")
 
 

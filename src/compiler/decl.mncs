@@ -456,18 +456,22 @@ fn parse_expr<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
     // 64-step chunk. `done` is terminal (expr_fail + close_or_reduce set
     // it; expr_step preserves it), so skipping is semantics-preserving.
     iterate i up_to 64 carrying d0: ExprState = seed {
+        if d0.done { return finish_expr<P, N>(pages, stride, total, d0); }
         next d0 = expr_step<P, N>(pages, stride, total, d0);
     }
     if d0.done { return finish_expr<P, N>(pages, stride, total, d0); }
     iterate i up_to 960 carrying d: ExprState = d0 {
+        if d.done { return finish_expr<P, N>(pages, stride, total, d); }
         next d = expr_step<P, N>(pages, stride, total, d);
     }
     if d.done { return finish_expr<P, N>(pages, stride, total, d); }
     iterate i up_to 1024 carrying h: ExprState = d {
+        if h.done { return finish_expr<P, N>(pages, stride, total, h); }
         next h = expr_step<P, N>(pages, stride, total, h);
     }
     if h.done { return finish_expr<P, N>(pages, stride, total, h); }
     iterate i up_to 32 carrying fin: ExprState = h {
+        if fin.done { return finish_expr<P, N>(pages, stride, total, fin); }
         next fin = expr_step<P, N>(pages, stride, total, fin);
     }
     return finish_expr<P, N>(pages, stride, total, fin);
@@ -489,31 +493,35 @@ fn parse_expr_noconstruct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     // 64-step chunk. `done` is terminal (expr_fail + close_or_reduce set
     // it; expr_step preserves it), so skipping is semantics-preserving.
     iterate i up_to 64 carrying d0: ExprState = seed {
+        if d0.done { return finish_expr<P, N>(pages, stride, total, d0); }
         next d0 = expr_step<P, N>(pages, stride, total, d0);
     }
     if d0.done { return finish_expr<P, N>(pages, stride, total, d0); }
     iterate i up_to 960 carrying d: ExprState = d0 {
+        if d.done { return finish_expr<P, N>(pages, stride, total, d); }
         next d = expr_step<P, N>(pages, stride, total, d);
     }
     if d.done { return finish_expr<P, N>(pages, stride, total, d); }
     iterate i up_to 1024 carrying h: ExprState = d {
+        if h.done { return finish_expr<P, N>(pages, stride, total, h); }
         next h = expr_step<P, N>(pages, stride, total, h);
     }
     if h.done { return finish_expr<P, N>(pages, stride, total, h); }
     iterate i up_to 32 carrying fin: ExprState = h {
+        if fin.done { return finish_expr<P, N>(pages, stride, total, fin); }
         next fin = expr_step<P, N>(pages, stride, total, fin);
     }
     return finish_expr<P, N>(pages, stride, total, fin);
 }
 fn parse_expr_base_noconstruct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, profile_013: bool) -> (result: ExprParse) {
     let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013, allow_construct: false, allow_index: true, allow_cast: true };
-    iterate i up_to 64 carrying d0: ExprState = seed { next d0 = expr_step_base<P, N>(pages, stride, total, d0); }
+    iterate i up_to 64 carrying d0: ExprState = seed { if d0.done { return finish_expr<P, N>(pages, stride, total, d0); } next d0 = expr_step_base<P, N>(pages, stride, total, d0); }
     if d0.done { return finish_expr<P, N>(pages, stride, total, d0); }
-    iterate i up_to 960 carrying d: ExprState = d0 { next d = expr_step_base<P, N>(pages, stride, total, d); }
+    iterate i up_to 960 carrying d: ExprState = d0 { if d.done { return finish_expr<P, N>(pages, stride, total, d); } next d = expr_step_base<P, N>(pages, stride, total, d); }
     if d.done { return finish_expr<P, N>(pages, stride, total, d); }
-    iterate i up_to 1024 carrying h: ExprState = d { next h = expr_step_base<P, N>(pages, stride, total, h); }
+    iterate i up_to 1024 carrying h: ExprState = d { if h.done { return finish_expr<P, N>(pages, stride, total, h); } next h = expr_step_base<P, N>(pages, stride, total, h); }
     if h.done { return finish_expr<P, N>(pages, stride, total, h); }
-    iterate i up_to 32 carrying fin: ExprState = h { next fin = expr_step_base<P, N>(pages, stride, total, fin); }
+    iterate i up_to 32 carrying fin: ExprState = h { if fin.done { return finish_expr<P, N>(pages, stride, total, fin); } next fin = expr_step_base<P, N>(pages, stride, total, fin); }
     return finish_expr<P, N>(pages, stride, total, fin);
 }
 
@@ -569,7 +577,7 @@ fn expr_step_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     }
     if tok.kind == 65 {
         if !(st.expect_operand) { return path_call<P, N>(pages, stride, total, st, tok); }
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil, targs: TypeArgList.TNil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true, profile_013: st.profile_013, allow_construct: st.allow_construct, allow_index: st.allow_index, allow_cast: st.allow_cast };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil, targs: TypeArgList.TNil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true, profile_013: st.profile_013, allow_construct: st.allow_construct, allow_index: st.allow_index, allow_cast: st.allow_cast };
     }
     if tok.kind == 66 {
         return close_paren<P, N>(pages, stride, total, st, tok);
@@ -1485,12 +1493,39 @@ fn close_paren<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
         OCons { head: op, tail: rest } => close_paren_top<P, N>(pages, stride, total, st, tok, op, rest)
     };
 }
+fn widen_group_expr(node: Expr, open_start: u64, close_end: u64) -> (result: Expr) {
+    return match node {
+        UnaryNot { value: v, start: s, end: e } => Expr.UnaryNot { value: v, start: open_start, end: close_end },
+        Binary { op: o, left: l, right: r, start: s, end: e } => Expr.Binary { op: o, left: l, right: r, start: open_start, end: close_end },
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => Expr.Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: open_start, end: close_end },
+        Name { start: s, end: e } => node,
+        Integer { start: s, end: e, value: v, overflow: o } => node,
+        Boolean { start: s, end: e, value: v } => node,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => node,
+        SequenceLiteral { elements: xs, start: s, end: e } => node,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => node,
+        Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => node,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => node,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => node,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => node,
+        Index { base: ib, index: ii, start: is, end: ie } => node,
+        Slice { base: sb, start_index: si, end_index: ei, start: ss, end: se } => node,
+        RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: f, start: s, end: e } => node,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => node
+    };
+}
+fn widen_group_operands(operands: ExprList, open_start: u64, close_end: u64) -> (result: ExprList) {
+    return match operands {
+        ENil => ExprList.ENil,
+        ECons { head: h, tail: t } => ExprList.ECons { head: widen_group_expr(h, open_start, close_end), tail: t }
+    };
+}
 fn close_paren_top<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
     if op.kind < 1000 { return reduce_one(st, op, rest, tok.start, tok.end); }
     if op.kind == 1002 { return reduce_one(st, op, rest, tok.start, tok.end); }
     if op.kind == 1000 {
         if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: rest, depth: st.depth - 1, done: false, expect_operand: false, profile_013: st.profile_013, allow_construct: st.allow_construct, allow_index: false, allow_cast: true };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: widen_group_operands(st.operands, op.name_start, tok.end), operators: rest, depth: st.depth - 1, done: false, expect_operand: false, profile_013: st.profile_013, allow_construct: st.allow_construct, allow_index: false, allow_cast: true };
     }
     if op.kind == 1004 || op.kind == 1005 || op.kind == 1006 || op.kind == 1007 || op.kind == 1008 { return expr_fail(st, tok.start, tok.end); }
     return close_call<P, N>(pages, stride, total, st, tok, op, rest);
@@ -2504,8 +2539,12 @@ fn generic_bound_kind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     return 2;
 }
 record GenericIndexScan { rest: GenericParamList, start: u64, end: u64, wanted_kind: u64, index: u64, found: u64 }
+fn generic_param_list_empty_local(list: GenericParamList) -> (result: bool) { return match list { GNil => true, GCons { head: h, tail: t } => false }; }
+fn generic_bound_list_empty_local(list: GenericBoundList) -> (result: bool) { return match list { KNil => true, KCons { head: h, tail: t } => false }; }
+fn type_arg_list_empty_local(list: TypeArgList) -> (result: bool) { return match list { TNil => true, TCons { head: h, tail: t } => false }; }
 fn generic_param_index<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: GenericParamList, start: u64, end: u64, wanted_kind: u64) -> (result: u64) {
     iterate i up_to 1024 carrying st: GenericIndexScan = GenericIndexScan { rest: list, start: start, end: end, wanted_kind: wanted_kind, index: 0, found: 0 } {
+        if st.found > 0 || generic_param_list_empty_local(st.rest) { return st.found; }
         next st = generic_param_index_step<P, N>(pages, stride, total, st);
     }
     return st.found;
@@ -2527,6 +2566,7 @@ fn generic_param_index_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
 record BoundBuild { rest: GenericParamList, acc: GenericBoundList }
 fn build_generic_bounds<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: GenericParamList) -> (result: GenericBoundList) {
     iterate i up_to 1024 carrying d: BoundBuild = BoundBuild { rest: list, acc: GenericBoundList.KNil } {
+        if generic_param_list_empty_local(d.rest) { return reverse_bounds<P, N>(pages, stride, total, d.acc); }
         next d = build_generic_bounds_step<P, N>(pages, stride, total, d);
     }
     return reverse_bounds<P, N>(pages, stride, total, d.acc);
@@ -2540,6 +2580,7 @@ fn build_generic_bounds_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 record BoundCount { rest: GenericBoundList, n: u64 }
 fn count_bounds(list: GenericBoundList) -> (result: u64) {
     iterate i up_to 1024 carrying d: BoundCount = BoundCount { rest: list, n: 0 } {
+        if generic_bound_list_empty_local(d.rest) { return d.n; }
         next d = count_bounds_step(d);
     }
     return d.n;
@@ -2553,6 +2594,7 @@ fn count_bounds_step(st: BoundCount) -> (result: BoundCount) {
 record TargCount { rest: TypeArgList, n: u64 }
 fn count_targs(list: TypeArgList) -> (result: u64) {
     iterate i up_to 1024 carrying d: TargCount = TargCount { rest: list, n: 0 } {
+        if type_arg_list_empty_local(d.rest) { return d.n; }
         next d = count_targs_step(d);
     }
     return d.n;
@@ -2568,6 +2610,7 @@ record GenericLookup { found: bool, kind: u64 }
 record GenericScan { rest: GenericParamList, start: u64, end: u64, found: bool, kind: u64 }
 fn generic_param_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: GenericParamList, start: u64, end: u64) -> (result: GenericLookup) {
     iterate i up_to 1024 carrying d: GenericScan = GenericScan { rest: list, start: start, end: end, found: false, kind: 0 } {
+        if d.found || generic_param_list_empty_local(d.rest) { return GenericLookup { found: d.found, kind: d.kind }; }
         next d = generic_param_lookup_step<P, N>(pages, stride, total, d);
     }
     return GenericLookup { found: d.found, kind: d.kind };
@@ -4493,6 +4536,7 @@ record OblPrepend { rest: OblList, acc: OblList }
 fn append_obls<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: OblList, second: OblList) -> (result: OblList) {
     let rev: OblList = reverse_obls<P, N>(pages, stride, total, first);
     iterate i up_to 1024 carrying d: OblPrepend = OblPrepend { rest: rev, acc: second } {
+        if obligation_list_empty(d.rest) { return d.acc; }
         next d = append_obls_step(d);
     }
     return d.acc;
@@ -5134,43 +5178,35 @@ record Scope { binds: BindList }
 enum ScopeStack { ZNil, ZCons { head: Scope, tail: ScopeStack } }
 record LookupRes { found: bool, ty: SemType }
 record ScopeLookup { rest: BindList, start: u64, end: u64, found: bool, ty: SemType }
+fn bind_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, binds: BindList, start: u64, end: u64) -> (result: bool) {
+    return match binds { BNil => false, BCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.start, h.end, start, end) };
+}
+fn bind_head_ty(binds: BindList) -> (result: SemType) {
+    return match binds { BNil => SemType.TPoison, BCons { head: h, tail: t } => h.ty };
+}
+fn bind_tail_local(binds: BindList) -> (result: BindList) {
+    return match binds { BNil => BindList.BNil, BCons { head: h, tail: t } => t };
+}
 fn scope_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, binds: BindList, start: u64, end: u64) -> (result: LookupRes) {
-    iterate i up_to 1024 carrying d: ScopeLookup = ScopeLookup { rest: binds, start: start, end: end, found: false, ty: SemType.TPoison } {
-        next d = scope_lookup_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: BindList = binds {
+        if bind_list_empty(rest) { return LookupRes { found: false, ty: SemType.TPoison }; }
+        if bind_head_matches<P, N>(pages, stride, total, rest, start, end) { return LookupRes { found: true, ty: bind_head_ty(rest) }; }
+        next rest = bind_tail_local(rest);
     }
-    return LookupRes { found: d.found, ty: d.ty };
+    return LookupRes { found: false, ty: SemType.TPoison };
 }
-fn scope_lookup_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ScopeLookup) -> (result: ScopeLookup) {
-    if st.found { return st; }
-    return match st.rest {
-        BNil => st,
-        BCons { head: h, tail: t } => scope_lookup_cons<P, N>(pages, stride, total, st, h, t)
-    };
-}
-fn scope_lookup_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ScopeLookup, h: Bind, t: BindList) -> (result: ScopeLookup) {
-    if spans_equal<P, N>(pages, stride, total, h.start, h.end, st.start, st.end) {
-        return ScopeLookup { rest: BindList.BNil, start: st.start, end: st.end, found: true, ty: h.ty };
-    }
-    return ScopeLookup { rest: t, start: st.start, end: st.end, found: false, ty: SemType.TPoison };
-}
+fn scope_stack_empty_local(st: ScopeStack) -> (result: bool) { return match st { ZNil => true, ZCons { head: h, tail: t } => false }; }
+fn scope_stack_head_binds(st: ScopeStack) -> (result: BindList) { return match st { ZNil => BindList.BNil, ZCons { head: h, tail: t } => h.binds }; }
+fn scope_stack_tail(st: ScopeStack) -> (result: ScopeStack) { return match st { ZNil => ScopeStack.ZNil, ZCons { head: h, tail: t } => t }; }
 record EnvLookup { rest: ScopeStack, start: u64, end: u64, found: bool, ty: SemType }
 fn env_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ScopeStack, start: u64, end: u64) -> (result: LookupRes) {
-    iterate i up_to 1024 carrying d: EnvLookup = EnvLookup { rest: st, start: start, end: end, found: false, ty: SemType.TPoison } {
-        next d = env_lookup_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: ScopeStack = st {
+        if scope_stack_empty_local(rest) { return LookupRes { found: false, ty: SemType.TPoison }; }
+        let got: LookupRes = scope_lookup<P, N>(pages, stride, total, scope_stack_head_binds(rest), start, end);
+        if got.found { return got; }
+        next rest = scope_stack_tail(rest);
     }
-    return LookupRes { found: d.found, ty: d.ty };
-}
-fn env_lookup_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnvLookup) -> (result: EnvLookup) {
-    if st.found { return st; }
-    return match st.rest {
-        ZNil => st,
-        ZCons { head: h, tail: t } => env_lookup_cons<P, N>(pages, stride, total, st, h, t)
-    };
-}
-fn env_lookup_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnvLookup, h: Scope, t: ScopeStack) -> (result: EnvLookup) {
-    let got: LookupRes = scope_lookup<P, N>(pages, stride, total, h.binds, st.start, st.end);
-    if got.found { return EnvLookup { rest: ScopeStack.ZNil, start: st.start, end: st.end, found: true, ty: got.ty }; }
-    return EnvLookup { rest: t, start: st.start, end: st.end, found: false, ty: SemType.TPoison };
+    return LookupRes { found: false, ty: SemType.TPoison };
 }
 record BindRes { dup: bool, stack: ScopeStack }
 fn env_bind_current<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ScopeStack, start: u64, end: u64, ty: SemType) -> (result: BindRes) {
@@ -5503,6 +5539,41 @@ fn canonical_function_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     let function_part: SemanticIdentityBuild = callable_identity_span<P, N>(pages, stride, total, sep2, function_start, function_end);
     return SemanticIdentity { bytes: function_part.bytes, len: function_part.len, valid: function_part.valid && module_end > module_start && function_end > function_start };
 }
+fn function_identity_prefix_ok(wanted: SemanticIdentity) -> (result: bool) {
+    if !(wanted.valid) || wanted.len < 22 || wanted.len > wanted.bytes.len { return false; }
+    return wanted.bytes[0] == (109 as byte) && wanted.bytes[1] == (110 as byte) && wanted.bytes[2] == (99 as byte) && wanted.bytes[3] == (115 as byte)
+        && wanted.bytes[4] == (58 as byte) && wanted.bytes[5] == (48 as byte) && wanted.bytes[6] == (46 as byte) && wanted.bytes[7] == (50 as byte)
+        && wanted.bytes[8] == (58 as byte) && wanted.bytes[9] == (102 as byte) && wanted.bytes[10] == (117 as byte) && wanted.bytes[11] == (110 as byte)
+        && wanted.bytes[12] == (99 as byte) && wanted.bytes[13] == (116 as byte) && wanted.bytes[14] == (105 as byte) && wanted.bytes[15] == (111 as byte)
+        && wanted.bytes[16] == (110 as byte) && wanted.bytes[17] == (58 as byte);
+}
+fn identity_span_matches_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, wanted: SemanticIdentity, offset: u64, start: u64, end: u64) -> (result: bool) {
+    if end <= start || end > total { return false; }
+    let size: u64 = end - start;
+    if offset > wanted.len || size > wanted.len - offset { return false; }
+    iterate i up_to 512 carrying n: u64 = 0 {
+        if n >= size { return true; }
+        if (segment.byte_at_global<P, N>(pages, stride, total, start + n) as byte) != wanted.bytes[offset + n] { return false; }
+        next n = n + 1;
+    }
+    return n == size;
+}
+fn function_identity_module_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, wanted: SemanticIdentity) -> (result: bool) {
+    if !(function_identity_prefix_ok(wanted)) || module_end <= module_start || module_end > total { return false; }
+    let mod_len: u64 = module_end - module_start;
+    if 18 + mod_len + 2 >= wanted.len { return false; }
+    if wanted.bytes[18 + mod_len] != (58 as byte) || wanted.bytes[18 + mod_len + 1] != (58 as byte) { return false; }
+    return identity_span_matches_at<P, N>(pages, stride, total, wanted, 18, module_start, module_end);
+}
+fn function_identity_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, function_start: u64, function_end: u64, wanted: SemanticIdentity) -> (result: bool) {
+    if !(function_identity_prefix_ok(wanted)) || module_end <= module_start || function_end <= function_start || module_end > total || function_end > total { return false; }
+    let mod_len: u64 = module_end - module_start;
+    let fn_len: u64 = function_end - function_start;
+    if 18 + mod_len + 2 + fn_len != wanted.len { return false; }
+    if wanted.bytes[18 + mod_len] != (58 as byte) || wanted.bytes[18 + mod_len + 1] != (58 as byte) { return false; }
+    if !(identity_span_matches_at<P, N>(pages, stride, total, wanted, 18 + mod_len + 2, function_start, function_end)) { return false; }
+    return identity_span_matches_at<P, N>(pages, stride, total, wanted, 18, module_start, module_end);
+}
 
 
 fn canonical_effect_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, name_start: u64, name_end: u64) -> (result: SemanticIdentity) {
@@ -5533,9 +5604,16 @@ fn signature_name_key<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     let key: SemanticIdentityBuild = identity_component_span<P, N>(pages, stride, total, seed, start, end);
     return SemanticIdentity { bytes: key.bytes, len: key.len, valid: key.valid && end > start };
 }
+fn effect_list_empty_local(list: EffectList) -> (result: bool) { return match list { XNil => true, XCons { head: h, tail: t } => false }; }
+fn cap_list_empty_local(list: CapList) -> (result: bool) { return match list { ANil => true, ACons { head: h, tail: t } => false }; }
+fn cap_id_list_empty_local(list: CapabilityIdentityList) -> (result: bool) { return match list { CapabilityIdentityList.CINil => true, CapabilityIdentityList.CICons { head: h, tail: t } => false }; }
+fn eff_id_list_empty_local(list: EffectIdentityList) -> (result: bool) { return match list { EffectIdentityList.EINil => true, EffectIdentityList.EICons { head: h, tail: t } => false }; }
 record EffectIdentityBuild { rest: EffectList, acc: EffectIdentityList, module_start: u64, module_end: u64 }
 fn canonical_effect_identities<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, effects: EffectList) -> (result: EffectIdentityList) {
-    iterate i up_to 1024 carrying st: EffectIdentityBuild = EffectIdentityBuild { rest: effects, acc: EffectIdentityList.EINil, module_start: module_start, module_end: module_end } { next st = canonical_effect_identity_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: EffectIdentityBuild = EffectIdentityBuild { rest: effects, acc: EffectIdentityList.EINil, module_start: module_start, module_end: module_end } {
+        if effect_list_empty_local(st.rest) { return st.acc; }
+        next st = canonical_effect_identity_step<P, N>(pages, stride, total, st);
+    }
     return st.acc;
 }
 fn canonical_effect_identity_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EffectIdentityBuild) -> (result: EffectIdentityBuild) {
@@ -5549,7 +5627,10 @@ fn canonical_effect_identity_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 }
 record CapabilityIdentityBuild { rest: CapList, acc: CapabilityIdentityList, module_start: u64, module_end: u64 }
 fn canonical_capability_identities<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, capabilities: CapList) -> (result: CapabilityIdentityList) {
-    iterate i up_to 1024 carrying st: CapabilityIdentityBuild = CapabilityIdentityBuild { rest: capabilities, acc: CapabilityIdentityList.CINil, module_start: module_start, module_end: module_end } { next st = canonical_capability_identity_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: CapabilityIdentityBuild = CapabilityIdentityBuild { rest: capabilities, acc: CapabilityIdentityList.CINil, module_start: module_start, module_end: module_end } {
+        if cap_list_empty_local(st.rest) { return st.acc; }
+        next st = canonical_capability_identity_step<P, N>(pages, stride, total, st);
+    }
     return st.acc;
 }
 fn canonical_capability_identity_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: CapabilityIdentityBuild) -> (result: CapabilityIdentityBuild) {
@@ -5561,7 +5642,10 @@ fn canonical_capability_identity_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up
 }
 record CapabilityIdentityLookup { rest: CapabilityIdentityList, identity: SemanticIdentity, found: bool }
 fn capability_identity_contains<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, capabilities: CapabilityIdentityList, identity: SemanticIdentity) -> (result: bool) {
-    iterate i up_to 1024 carrying st: CapabilityIdentityLookup = CapabilityIdentityLookup { rest: capabilities, identity: identity, found: false } { next st = capability_identity_lookup_step(st); }
+    iterate i up_to 1024 carrying st: CapabilityIdentityLookup = CapabilityIdentityLookup { rest: capabilities, identity: identity, found: false } {
+        if st.found || cap_id_list_empty_local(st.rest) { return st.found; }
+        next st = capability_identity_lookup_step(st);
+    }
     return st.found;
 }
 fn capability_identity_lookup_step(st: CapabilityIdentityLookup) -> (result: CapabilityIdentityLookup) {
@@ -5574,7 +5658,10 @@ fn capability_identity_lookup_one(st: CapabilityIdentityLookup, item: Capability
 }
 record CapabilityIdentityValidation { rest: CapabilityIdentityList, ok: bool }
 fn capability_identity_list_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, capabilities: CapabilityIdentityList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: CapabilityIdentityValidation = CapabilityIdentityValidation { rest: capabilities, ok: true } { next st = capability_identity_valid_step(st); }
+    iterate i up_to 1024 carrying st: CapabilityIdentityValidation = CapabilityIdentityValidation { rest: capabilities, ok: true } {
+        if !(st.ok) || cap_id_list_empty_local(st.rest) { return st.ok; }
+        next st = capability_identity_valid_step(st);
+    }
     return st.ok;
 }
 fn capability_identity_valid_step(st: CapabilityIdentityValidation) -> (result: CapabilityIdentityValidation) {
@@ -5583,7 +5670,11 @@ fn capability_identity_valid_step(st: CapabilityIdentityValidation) -> (result: 
 }
 record SignatureIdentityValidation { rest: EffectIdentityList, capabilities: CapabilityIdentityList, ok: bool }
 fn signature_identity_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, effects: EffectIdentityList, capabilities: CapabilityIdentityList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: SignatureIdentityValidation = SignatureIdentityValidation { rest: effects, capabilities: capabilities, ok: capability_identity_list_valid<P, N>(pages, stride, total, capabilities) } { next st = signature_identity_valid_step<P, N>(pages, stride, total, st); }
+    if eff_id_list_empty_local(effects) && cap_id_list_empty_local(capabilities) { return true; }
+    iterate i up_to 1024 carrying st: SignatureIdentityValidation = SignatureIdentityValidation { rest: effects, capabilities: capabilities, ok: capability_identity_list_valid<P, N>(pages, stride, total, capabilities) } {
+        if !(st.ok) || eff_id_list_empty_local(st.rest) { return st.ok; }
+        next st = signature_identity_valid_step<P, N>(pages, stride, total, st);
+    }
     return st.ok;
 }
 fn signature_identity_valid_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SignatureIdentityValidation) -> (result: SignatureIdentityValidation) {
@@ -5592,7 +5683,10 @@ fn signature_identity_valid_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 }
 record EffectCoverageLookup { rest: EffectIdentityList, want: EffectIdentity, found: bool }
 fn effect_identity_covered<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, available: EffectIdentityList, want: EffectIdentity) -> (result: bool) {
-    iterate i up_to 1024 carrying st: EffectCoverageLookup = EffectCoverageLookup { rest: available, want: want, found: false } { next st = effect_coverage_lookup_step(st); }
+    iterate i up_to 1024 carrying st: EffectCoverageLookup = EffectCoverageLookup { rest: available, want: want, found: false } {
+        if st.found || eff_id_list_empty_local(st.rest) { return st.found; }
+        next st = effect_coverage_lookup_step(st);
+    }
     return st.found;
 }
 fn effect_coverage_lookup_step(st: EffectCoverageLookup) -> (result: EffectCoverageLookup) {
@@ -5605,7 +5699,10 @@ fn effect_coverage_lookup_one(st: EffectCoverageLookup, item: EffectIdentity, re
 }
 record EffectNeedScan { rest: EffectIdentityList, ok: bool }
 fn effects_covered<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, available: EffectIdentityList, need: EffectIdentityList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: EffectNeedScan = EffectNeedScan { rest: need, ok: true } { next st = effects_covered_step<P, N>(pages, stride, total, available, st); }
+    iterate i up_to 1024 carrying st: EffectNeedScan = EffectNeedScan { rest: need, ok: true } {
+        if !(st.ok) || eff_id_list_empty_local(st.rest) { return st.ok; }
+        next st = effects_covered_step<P, N>(pages, stride, total, available, st);
+    }
     return st.ok;
 }
 fn effects_covered_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, available: EffectIdentityList, st: EffectNeedScan) -> (result: EffectNeedScan) {
@@ -5941,9 +6038,24 @@ fn bind_local_callable_sig<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 }
 fn bind_callable_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, sig: Sig) -> (result: Sig) {
     let identity: SemanticIdentity = canonical_function_identity<P, N>(pages, stride, total, module_start, module_end, sig.start, sig.end);
+    return bind_callable_signature_with_identity<P, N>(pages, stride, total, module_start, module_end, sig, identity);
+}
+fn bind_callable_signature_with_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, module_start: u64, module_end: u64, sig: Sig, identity: SemanticIdentity) -> (result: Sig) {
     let effects: EffectIdentityList = canonical_effect_identities<P, N>(pages, stride, total, module_start, module_end, sig.fx);
     let capabilities: CapabilityIdentityList = canonical_capability_identities<P, N>(pages, stride, total, module_start, module_end, sig.raw_capabilities);
     return Sig { ..sig, effects: effects, capabilities: capabilities, identity: identity };
+}
+fn bind_single_local_callable_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, tab: SigTab, known_identity: SemanticIdentity) -> (result: SigTab) {
+    return match tab {
+        HNil => SigTab.HNil,
+        HCons { head: sig, tail: rest } => bind_single_local_callable_one<P, N>(pages, stride, total, header, sig, rest, known_identity)
+    };
+}
+fn bind_single_local_callable_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, sig: Sig, rest: SigTab, known_identity: SemanticIdentity) -> (result: SigTab) {
+    if function_identity_matches<P, N>(pages, stride, total, header.module_start, header.module_end, sig.start, sig.end, known_identity) {
+        return SigTab.HCons { head: bind_callable_signature_with_identity<P, N>(pages, stride, total, header.module_start, header.module_end, sig, known_identity), tail: rest };
+    }
+    return SigTab.HCons { head: bind_callable_signature<P, N>(pages, stride, total, header.module_start, header.module_end, sig), tail: rest };
 }
 fn check_sig<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, h: FnDecl, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: SigRep) {
     let sg: FnSig = h.sig;
@@ -6926,6 +7038,7 @@ enum SemKont {
     KImportedRecordBase { declared: ImportedRecordFieldList, fields: ConstructFieldList, ty: SemType, type_start: u64, type_end: u64, base_start: u64, base_end: u64, start: u64, end: u64, exp: ExpTy },
     KConstructField { remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, mismatch_kind: u64, shape_ok: bool, is_record: bool, diagnostic_end: u64, start: u64, end: u64, exp: ExpTy },
     KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
+    KBinLitR { op: u64, left: Expr, prior_tops: u64, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
     KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy },
@@ -6953,8 +7066,11 @@ fn prove_expr<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
 fn prove_expr_with_imported_records<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, imported_records: ImportedRecordList, effects: EffectIdentityList, caller_fx: EffectList, caller_caps: CapList, gparams: GenericParamList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
     return prove_expr_with_imported_schemas<P, N>(pages, stride, total, env, sigs, rectab, enumtab, nominals, imported_records, ImportedEnumList.IENil, effects, caller_fx, caller_caps, gparams, e, exp);
 }
+fn job_list_empty(jobs: JobList) -> (result: bool) { return match jobs { JNil => true, JCons { head: h, tail: t } => false }; }
+fn kont_list_empty(konts: KontList) -> (result: bool) { return match konts { QNil => true, QCons { head: h, tail: t } => false }; }
 fn prove_expr_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, imported_records: ImportedRecordList, imported_enums: ImportedEnumList, effects: EffectIdentityList, caller_fx: EffectList, caller_caps: CapList, gparams: GenericParamList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
     iterate i up_to 1024 carrying d: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, nominals: nominals, imported_records: imported_records, imported_enums: imported_enums, effects: effects, caller_fx: caller_fx, caller_caps: caller_caps, gparams: gparams, total: total } {
+        if d.failed || (job_list_empty(d.jobs) && kont_list_empty(d.konts)) { return finish_prove_expr<P, N>(pages, stride, total, d); }
         next d = sem_step<P, N>(pages, stride, total, d);
     }
     return finish_prove_expr<P, N>(pages, stride, total, d);
@@ -6997,7 +7113,7 @@ fn sem_job<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => seed_repeat<P, N>(pages, stride, total, st, value, cs, ce, ck, s, e, job.exp),
         SequenceLiteral { elements: xs, start: s, end: e } => seed_sequence_literal<P, N>(pages, stride, total, st, xs, s, e, job.exp),
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => seed_scalar_match<P, N>(pages, stride, total, st, subject, arms, s, e, job.exp),
-        Binary { op: o, left: l, right: r, start: s, end: e } => seed_binop(st, o, l, r, s, e, job.exp),
+        Binary { op: o, left: l, right: r, start: s, end: e } => seed_binop<P, N>(pages, stride, total, st, o, l, r, s, e, job.exp),
         Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => seed_call<P, N>(pages, stride, total, st, ns, ne, a, tg, s, e, job.exp),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => seed_proj<P, N>(pages, stride, total, st, b, fs, fe, s, e, job.exp),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => seed_finite_match<P, N>(pages, stride, total, st, subject, arms, s, e, job.exp),
@@ -7970,6 +8086,7 @@ fn seed_local_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 record BindRev { rest: BindList, acc: BindList }
 fn reverse_binds<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, binds: BindList) -> (result: BindList) {
     iterate i up_to 1024 carrying d: BindRev = BindRev { rest: binds, acc: BindList.BNil } {
+        if bind_list_empty(d.rest) { return d.acc; }
         next d = reverse_binds_step(d);
     }
     return d.acc;
@@ -8271,11 +8388,61 @@ fn exp_is_poison(exp: ExpTy) -> (result: bool) {
         XSome { ty: t } => is_poison(t)
     };
 }
-fn seed_binop(st: SemState, op: u64, left: Expr, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+fn seed_binop<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, op: u64, left: Expr, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if is_threaded(op) && is_integer_literal(left) {
+        let rexp: ExpTy = bin_left_exp(op, exp, right);
+        let prior_tops: u64 = count_tops<P, N>(pages, stride, total, st.tops);
+        let job: SemJob = SemJob { e: right, exp: rexp };
+        let kont: SemKont = SemKont.KBinLitR { op: op, left: left, prior_tops: prior_tops, start: start, end: end, rlit: nonzero_lit(right), exp: exp };
+        return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+    }
     let lexp: ExpTy = bin_left_exp(op, exp, left);
     let job: SemJob = SemJob { e: left, exp: lexp };
     let kont: SemKont = SemKont.KBinL { op: op, right: right, start: start, end: end, exp: exp };
     return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+record TopsConcat { rest: TOpList, acc: TOpList }
+fn concat_tops_rev<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, prefix_in_order: TOpList, base: TOpList) -> (result: TOpList) {
+    // prefix_in_order is in forward order (from split_tops_prefix.taken); push each onto base so the newest op is at the head of the reversed tops list.
+    iterate i up_to 1024 carrying d: TopsConcat = TopsConcat { rest: prefix_in_order, acc: base } {
+        if top_list_empty(d.rest) { return d.acc; }
+        next d = concat_tops_rev_step(d);
+    }
+    return d.acc;
+}
+fn concat_tops_rev_step(st: TopsConcat) -> (result: TopsConcat) {
+    return match st.rest { PNil => st, PCons { head: h, tail: t } => TopsConcat { rest: t, acc: TOpList.PCons { head: h, tail: st.acc } } };
+}
+fn finish_int_expr(st: SemState, left: Expr, exp: ExpTy) -> (result: SemState) {
+    return match left {
+        Integer { start: s, end: e, value: v, overflow: o } => finish_int(st, v, s, e, exp),
+        Name { start: s, end: e } => sem_drain(st),
+        Boolean { start: s, end: e, value: v } => sem_drain(st),
+        UnaryNot { value: value, start: s, end: e } => sem_drain(st),
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => sem_drain(st),
+        SequenceLiteral { elements: xs, start: s, end: e } => sem_drain(st),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => sem_drain(st),
+        Binary { op: o, left: l, right: r, start: s, end: e } => sem_drain(st),
+        Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => sem_drain(st),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => sem_drain(st),
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => sem_drain(st),
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => sem_drain(st),
+        Index { base: ib, index: ii, start: is, end: ie } => sem_drain(st),
+        Slice { base: sb, start_index: si, end_index: ei, start: ss, end: se } => sem_drain(st),
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => sem_drain(st),
+        RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: f, start: s, end: e } => sem_drain(st),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => sem_drain(st)
+    };
+}
+fn apply_bin_lit_r<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, op: u64, left: Expr, prior_tops: u64, start: u64, end: u64, rlit: bool, exp: ExpTy) -> (result: SemState) {
+    let rty: SemType = st.last_ty;
+    let total_tops: u64 = count_tops<P, N>(pages, stride, total, st.tops);
+    let delta: u64 = select(total_tops >= prior_tops, total_tops - prior_tops, 0);
+    let split: TopsPrefixSplit = split_tops_prefix<P, N>(pages, stride, total, st.tops, delta);
+    let left_st: SemState = finish_int_expr(SemState { ..st, tops: split.rest }, left, ExpTy.XSome { ty: rty });
+    let merged_tops: TOpList = concat_tops_rev<P, N>(pages, stride, total, split.taken, left_st.tops);
+    let merged_st: SemState = SemState { ..left_st, tops: merged_tops, last_ty: rty, failed: left_st.failed || total_tops < prior_tops || !(split.ok) };
+    return apply_bin_r<P, N>(pages, stride, total, merged_st, op, left_st.last_ty, start, end, rlit, exp);
 }
 fn nonzero_lit(e: Expr) -> (result: bool) {
     return match e {
@@ -8376,6 +8543,7 @@ fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         KImportedRecordBase { declared: declared, fields: fields, ty: ty, type_start: ts, type_end: te, base_start: bs, base_end: be, start: s, end: e, exp: x } => apply_imported_record_base<P, N>(pages, stride, total, st, declared, fields, ty, ts, te, bs, be, s, e, x),
         KConstructField { remaining: remaining, total: total, ty: ty, params: params, vs: vs, ve: ve, cty: cty, cvs: cvs, cve: cve, mismatch_kind: mismatch_kind, shape_ok: shape_ok, is_record: is_record, diagnostic_end: diagnostic_end, start: s, end: e, exp: x } => continue_construct_field<P, N>(pages, stride, total, st, remaining, total, ty, params, vs, ve, cty, cvs, cve, mismatch_kind, shape_ok, is_record, diagnostic_end, s, e, x),
         KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
+        KBinLitR { op: o, left: l, prior_tops: pt, start: s, end: e, rlit: q, exp: x } => apply_bin_lit_r<P, N>(pages, stride, total, st, o, l, pt, s, e, q, x),
         KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r<P, N>(pages, stride, total, st, o, l, s, e, q, x),
         KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a<P, N>(pages, stride, total, st, g, a, p, s, e, x),
         KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj<P, N>(pages, stride, total, st, fs, fe, bs, be, s, e, x),
@@ -8493,11 +8661,17 @@ fn finish_bin_divmod(st: SemState, op: u64, lty: SemType, start: u64, end: u64, 
     if rlit { return sem_emit_top(sem_accept(st, lty), TOp.TBin { op: op, ty: lty, start: start, end: end }); }
     return sem_emit_top(sem_accept(sem_emit(st, 14, start, end, 2), lty), TOp.TBin { op: op, ty: lty, start: start, end: end });
 }
+fn finish_bin_bool_cmp(st: SemState, op: u64, start: u64, end: u64) -> (result: SemState) {
+    if op == 84 || op == 85 {
+        return sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end });
+    }
+    return sem_drain(sem_emit(st, 9, start, end, 1));
+}
 fn finish_bin_cmp(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> (result: SemState) {
     return match lty {
         TInt { width: w, signed: g } => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end }),
         TByte => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end }),
-        TBool => sem_drain(sem_emit(st, 9, start, end, 1)),
+        TBool => finish_bin_bool_cmp(st, op, start, end),
         TNamed { start: n, end: m } => sem_drain(sem_emit(st, 9, start, end, 1)),
         TSeq => sem_drain(sem_emit(st, 9, start, end, 1)),
         TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 9, start, end, 1)),
@@ -8522,42 +8696,39 @@ fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -
 // Callee signatures resolve by exact name bytes over the collected table.
 record SigRes { found: bool, sig: Sig }
 record SigScan { rest: SigTab, start: u64, end: u64, found: bool, sig: Sig }
+fn empty_sig_placeholder() -> (result: Sig) {
+    return Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, generic_bounds: GenericBoundList.KNil, result: SemType.TPoison, fx: EffectList.XNil, raw_capabilities: CapList.ANil, effects: EffectIdentityList.EINil, capabilities: CapabilityIdentityList.CINil, identity: invalid_semantic_identity() };
+}
+fn sig_table_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, sigs: SigTab, start: u64, end: u64) -> (result: bool) {
+    return match sigs { HNil => false, HCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.start, h.end, start, end) };
+}
+fn sig_table_head(sigs: SigTab) -> (result: Sig) {
+    return match sigs { HNil => empty_sig_placeholder(), HCons { head: h, tail: t } => h };
+}
+fn sig_table_tail(sigs: SigTab) -> (result: SigTab) {
+    return match sigs { HNil => SigTab.HNil, HCons { head: h, tail: t } => t };
+}
 fn sig_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, sigs: SigTab, start: u64, end: u64) -> (result: SigRes) {
-    let initial: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, generic_bounds: GenericBoundList.KNil, result: SemType.TPoison, fx: EffectList.XNil, raw_capabilities: CapList.ANil, effects: EffectIdentityList.EINil, capabilities: CapabilityIdentityList.CINil, identity: invalid_semantic_identity() } };
     // Signature tables are source-sized linked lists. Continue in bounded
     // chunks so late declarations remain addressable without recursive walks.
-    iterate chunk up_to 64 carrying d: SigScan = initial {
-        if d.found || sig_table_empty(d.rest) { return SigRes { found: d.found, sig: d.sig }; }
-        next d = sig_lookup_chunk<P, N>(pages, stride, total, d);
+    iterate chunk up_to 64 carrying outer: SigTab = sigs {
+        iterate i up_to 1024 carrying rest: SigTab = outer {
+            if sig_table_empty(rest) { return SigRes { found: false, sig: empty_sig_placeholder() }; }
+            if sig_table_head_matches<P, N>(pages, stride, total, rest, start, end) { return SigRes { found: true, sig: sig_table_head(rest) }; }
+            next rest = sig_table_tail(rest);
+        }
+        if sig_table_empty(rest) { return SigRes { found: false, sig: empty_sig_placeholder() }; }
+        next outer = rest;
     }
-    return SigRes { found: d.found, sig: d.sig };
-}
-fn sig_lookup_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: SigScan) -> (result: SigScan) {
-    iterate i up_to 1024 carrying d: SigScan = initial {
-        if d.found || sig_table_empty(d.rest) { return d; }
-        next d = sig_lookup_step<P, N>(pages, stride, total, d);
-    }
-    return d;
+    return SigRes { found: false, sig: empty_sig_placeholder() };
 }
 fn sig_table_empty(sigs: SigTab) -> (result: bool) {
     return match sigs { HNil => true, HCons { head: head, tail: tail } => false };
 }
-fn sig_lookup_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SigScan) -> (result: SigScan) {
-    if st.found { return st; }
-    return match st.rest {
-        HNil => st,
-        HCons { head: h, tail: t } => sig_lookup_cons<P, N>(pages, stride, total, st, h, t)
-    };
-}
-fn sig_lookup_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SigScan, h: Sig, t: SigTab) -> (result: SigScan) {
-    if spans_equal<P, N>(pages, stride, total, h.start, h.end, st.start, st.end) {
-        return SigScan { rest: SigTab.HNil, start: st.start, end: st.end, found: true, sig: h };
-    }
-    return SigScan { rest: t, start: st.start, end: st.end, found: false, sig: st.sig };
-}
 record TysAcc { rest: BindList, acc: TyList }
 fn params_to_tys<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, params: BindList) -> (result: TyList) {
     iterate i up_to 1024 carrying d: TysAcc = TysAcc { rest: params, acc: TyList.TyNil } {
+        if bind_list_empty(d.rest) { return d.acc; }
         next d = params_to_tys_step(d);
     }
     // Signature bindings are stored in reverse source order. Prepending
@@ -9049,6 +9220,7 @@ fn sabotage_op_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
 record GenericArgAt { rest: TypeArgList, index: u64, arg: TypeArg, found: bool }
 fn generic_arg_at(args: TypeArgList, index: u64) -> (result: GenericArgAt) {
     iterate i up_to 1024 carrying st: GenericArgAt = GenericArgAt { rest: args, index: index, arg: TypeArg { start: 0, end: 0, kind: 0 }, found: false } {
+        if st.found || st.index == 0 || type_arg_list_empty_local(st.rest) { return st; }
         next st = generic_arg_at_step(st);
     }
     return st;
@@ -9073,6 +9245,7 @@ fn specialize_call_sig<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
 }
 fn specialize_call_params<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, params: BindList, args: TypeArgList) -> (result: BindList) {
     iterate i up_to 1024 carrying d: BindSpecialize = BindSpecialize { rest: params, acc: BindList.BNil } {
+        if bind_list_empty(d.rest) { return reverse_binds<P, N>(pages, stride, total, d.acc); }
         next d = specialize_call_param_step<P, N>(pages, stride, total, st, d, args);
     }
     // Keep the signature's established reverse-source bind order. The call
@@ -9628,85 +9801,71 @@ fn span_is_len<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
 // resolve by exact name bytes within the record, first declaration wins.
 record RecFind { rest: RecordList, ns: u64, ne: u64, found: bool, decl: RecordDecl }
 record FieldScan { rest: FieldList, fs: u64, fe: u64, found: bool, field: Field, index: u64 }
+fn empty_record_decl_placeholder() -> (result: RecordDecl) {
+    return RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 };
+}
+fn rec_list_empty_local(list: RecordList) -> (result: bool) { return match list { RNil => true, RCons { head: h, tail: t } => false }; }
+fn rec_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: RecordList, ns: u64, ne: u64) -> (result: bool) {
+    return match list { RNil => false, RCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, ns, ne) };
+}
+fn rec_head(list: RecordList) -> (result: RecordDecl) { return match list { RNil => empty_record_decl_placeholder(), RCons { head: h, tail: t } => h }; }
+fn rec_tail(list: RecordList) -> (result: RecordList) { return match list { RNil => RecordList.RNil, RCons { head: h, tail: t } => t }; }
 fn rec_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, rectab: RecordList, ns: u64, ne: u64) -> (result: RecFind) {
-    iterate i up_to 1024 carrying d: RecFind = RecFind { rest: rectab, ns: ns, ne: ne, found: false, decl: RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
-        next d = rec_lookup_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: RecordList = rectab {
+        if rec_list_empty_local(rest) { return RecFind { rest: RecordList.RNil, ns: ns, ne: ne, found: false, decl: empty_record_decl_placeholder() }; }
+        if rec_head_matches<P, N>(pages, stride, total, rest, ns, ne) { return RecFind { rest: RecordList.RNil, ns: ns, ne: ne, found: true, decl: rec_head(rest) }; }
+        next rest = rec_tail(rest);
     }
-    return d;
+    return RecFind { rest: RecordList.RNil, ns: ns, ne: ne, found: false, decl: empty_record_decl_placeholder() };
 }
-fn rec_lookup_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecFind) -> (result: RecFind) {
-    if st.found { return st; }
-    return match st.rest {
-        RNil => st,
-        RCons { head: h, tail: t } => rec_lookup_cons<P, N>(pages, stride, total, st, h, t)
-    };
+fn field_list_empty_local(list: FieldList) -> (result: bool) { return match list { FNil => true, FCons { head: h, tail: t } => false }; }
+fn field_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: FieldList, fs: u64, fe: u64) -> (result: bool) {
+    return match list { FNil => false, FCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, fs, fe) };
 }
-fn rec_lookup_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecFind, h: RecordDecl, t: RecordList) -> (result: RecFind) {
-    if spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, st.ns, st.ne) {
-        return RecFind { rest: RecordList.RNil, ns: st.ns, ne: st.ne, found: true, decl: h };
-    }
-    return RecFind { rest: t, ns: st.ns, ne: st.ne, found: false, decl: st.decl };
-}
+fn field_head(list: FieldList) -> (result: Field) { return match list { FNil => Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 }, FCons { head: h, tail: t } => h }; }
+fn field_tail(list: FieldList) -> (result: FieldList) { return match list { FNil => FieldList.FNil, FCons { head: h, tail: t } => t }; }
 fn field_scan<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: FieldList, fs: u64, fe: u64) -> (result: FieldScan) {
-    iterate i up_to 1024 carrying d: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 }, index: 0 } {
-        next d = field_scan_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: FieldList = fields {
+        if field_list_empty_local(rest) { return FieldScan { rest: FieldList.FNil, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 }, index: i }; }
+        if field_head_matches<P, N>(pages, stride, total, rest, fs, fe) { return FieldScan { rest: FieldList.FNil, fs: fs, fe: fe, found: true, field: field_head(rest), index: i }; }
+        next rest = field_tail(rest);
     }
-    return d;
-}
-fn field_scan_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FieldScan) -> (result: FieldScan) {
-    if st.found { return st; }
-    return match st.rest {
-        FNil => st,
-        FCons { head: h, tail: t } => field_scan_cons<P, N>(pages, stride, total, st, h, t)
-    };
-}
-fn field_scan_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FieldScan, h: Field, t: FieldList) -> (result: FieldScan) {
-    if spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, st.fs, st.fe) {
-        return FieldScan { rest: FieldList.FNil, fs: st.fs, fe: st.fe, found: true, field: h, index: st.index };
-    }
-    return FieldScan { rest: t, fs: st.fs, fe: st.fe, found: false, field: st.field, index: st.index + 1 };
+    return FieldScan { rest: FieldList.FNil, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 }, index: 1024 };
 }
 // Enum/variant resolution mirrors record/field resolution: exact name bytes
 // over the collected tables, first declaration wins.
 record EnumFind { rest: EnumList, ns: u64, ne: u64, found: bool, decl: EnumDecl }
 record VariantScan { rest: VariantList, vs: u64, ve: u64, found: bool, variant: Variant }
+fn empty_enum_decl_placeholder() -> (result: EnumDecl) {
+    return EnumDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, variants: VariantList.VNil, decl_start: 0, decl_end: 0, cursor: 0 };
+}
+fn enum_list_empty_local(list: EnumList) -> (result: bool) { return match list { GNil => true, GCons { head: h, tail: t } => false }; }
+fn enum_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: EnumList, ns: u64, ne: u64) -> (result: bool) {
+    return match list { GNil => false, GCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, ns, ne) };
+}
+fn enum_head(list: EnumList) -> (result: EnumDecl) { return match list { GNil => empty_enum_decl_placeholder(), GCons { head: h, tail: t } => h }; }
+fn enum_tail(list: EnumList) -> (result: EnumList) { return match list { GNil => EnumList.GNil, GCons { head: h, tail: t } => t }; }
 fn enum_lookup<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, enumtab: EnumList, ns: u64, ne: u64) -> (result: EnumFind) {
-    iterate i up_to 1024 carrying d: EnumFind = EnumFind { rest: enumtab, ns: ns, ne: ne, found: false, decl: EnumDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, variants: VariantList.VNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
-        next d = enum_lookup_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: EnumList = enumtab {
+        if enum_list_empty_local(rest) { return EnumFind { rest: EnumList.GNil, ns: ns, ne: ne, found: false, decl: empty_enum_decl_placeholder() }; }
+        if enum_head_matches<P, N>(pages, stride, total, rest, ns, ne) { return EnumFind { rest: EnumList.GNil, ns: ns, ne: ne, found: true, decl: enum_head(rest) }; }
+        next rest = enum_tail(rest);
     }
-    return d;
+    return EnumFind { rest: EnumList.GNil, ns: ns, ne: ne, found: false, decl: empty_enum_decl_placeholder() };
 }
-fn enum_lookup_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnumFind) -> (result: EnumFind) {
-    if st.found { return st; }
-    return match st.rest {
-        GNil => st,
-        GCons { head: h, tail: t } => enum_lookup_cons<P, N>(pages, stride, total, st, h, t)
-    };
+fn variant_list_empty_local(list: VariantList) -> (result: bool) { return match list { VNil => true, VCons { head: h, tail: t } => false }; }
+fn variant_head_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: VariantList, vs: u64, ve: u64) -> (result: bool) {
+    return match list { VNil => false, VCons { head: h, tail: t } => spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, vs, ve) };
 }
-fn enum_lookup_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnumFind, h: EnumDecl, t: EnumList) -> (result: EnumFind) {
-    if spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, st.ns, st.ne) {
-        return EnumFind { rest: EnumList.GNil, ns: st.ns, ne: st.ne, found: true, decl: h };
-    }
-    return EnumFind { rest: t, ns: st.ns, ne: st.ne, found: false, decl: st.decl };
-}
+fn variant_head(list: VariantList) -> (result: Variant) { return match list { VNil => Variant { name_start: 0, name_end: 0, fields: FieldList.FNil }, VCons { head: h, tail: t } => h }; }
+fn variant_tail(list: VariantList) -> (result: VariantList) { return match list { VNil => VariantList.VNil, VCons { head: h, tail: t } => t }; }
 fn variant_scan<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, variants: VariantList, vs: u64, ve: u64) -> (result: VariantScan) {
-    iterate i up_to 1024 carrying d: VariantScan = VariantScan { rest: variants, vs: vs, ve: ve, found: false, variant: Variant { name_start: 0, name_end: 0, fields: FieldList.FNil } } {
-        next d = variant_scan_step<P, N>(pages, stride, total, d);
+    iterate i up_to 1024 carrying rest: VariantList = variants {
+        if variant_list_empty_local(rest) { return VariantScan { rest: VariantList.VNil, vs: vs, ve: ve, found: false, variant: Variant { name_start: 0, name_end: 0, fields: FieldList.FNil } }; }
+        if variant_head_matches<P, N>(pages, stride, total, rest, vs, ve) { return VariantScan { rest: VariantList.VNil, vs: vs, ve: ve, found: true, variant: variant_head(rest) }; }
+        next rest = variant_tail(rest);
     }
-    return d;
-}
-fn variant_scan_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: VariantScan) -> (result: VariantScan) {
-    if st.found { return st; }
-    return match st.rest {
-        VNil => st,
-        VCons { head: h, tail: t } => variant_scan_cons<P, N>(pages, stride, total, st, h, t)
-    };
-}
-fn variant_scan_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: VariantScan, h: Variant, t: VariantList) -> (result: VariantScan) {
-    if spans_equal<P, N>(pages, stride, total, h.name_start, h.name_end, st.vs, st.ve) {
-        return VariantScan { rest: VariantList.VNil, vs: st.vs, ve: st.ve, found: true, variant: h };
-    }
-    return VariantScan { rest: t, vs: st.vs, ve: st.ve, found: false, variant: st.variant };
+    return VariantScan { rest: VariantList.VNil, vs: vs, ve: ve, found: false, variant: Variant { name_start: 0, name_end: 0, fields: FieldList.FNil } };
 }
 fn proj_named<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, ns: u64, ne: u64, fs: u64, fe: u64, bs: u64, be: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     if generic_type_marker_index(ns, ne) > 1024 { return proj_imported_named<P, N>(pages, stride, total, st, ns, ne, fs, fe, bs, be, start, end, exp); }
@@ -9841,8 +10000,11 @@ fn count_results_step(st: ResCount) -> (result: ResCount) {
 record StmtFrame { next: StmtList, saved_env: ScopeStack, else_b: StmtList, phase: u64, kind: u64, state_start: u64, state_end: u64, state_ty: SemType, next_name_start: u64, next_name_end: u64, next_value: Expr, loop_name_start: u64, loop_name_end: u64, loop_bound: u64 }
 enum StmtFrames { BrNil, BrCons { head: StmtFrame, tail: StmtFrames } }
 record StmtWalk { rest: StmtList, frames: StmtFrames, env: ScopeStack, closed: bool, ok: bool, obls: OblList, tops: TopsList, sig: Sig, gparams: GenericParamList, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, imported_records: ImportedRecordList, imported_enums: ImportedEnumList, total: u64, profile_011: bool, profile_013: bool, iteration_names: NameList }
+fn stmt_frames_empty(frames: StmtFrames) -> (result: bool) { return match frames { BrNil => true, BrCons { head: h, tail: t } => false }; }
 fn prove_stmts<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, w: StmtWalk) -> (result: StmtWalk) {
     iterate i up_to 1024 carrying d: StmtWalk = w {
+        if !(d.ok) { return StmtWalk { ..d, rest: StmtList.SNil, frames: StmtFrames.BrNil }; }
+        if stmt_list_empty(d.rest) && stmt_frames_empty(d.frames) { return d; }
         next d = prove_stmt_step<P, N>(pages, stride, total, d);
     }
     return d;

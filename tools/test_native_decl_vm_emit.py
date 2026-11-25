@@ -74,12 +74,36 @@ fn call_prove_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) 
 """
 PROVE_UNIT_CALLER = "mncs:0.2:function:mncs.test.prove_unit_caller.v1::call_prove_unit"
 
+CANONICAL_FINITE_ID_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.canonical_finite_id_caller.v1;
+use mncs.compiler.decl.v1 as decl;
+
+fn call_canonical_finite_type_identity(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64, module_start: u64, module_end: u64, name_start: u64, name_end: u64) -> (result: decl.SemanticIdentity) {
+    return decl.canonical_finite_type_identity<4, 32>(pages, stride, total, module_start, module_end, name_start, name_end);
+}
+"""
+CANONICAL_FINITE_ID_CALLER = "mncs:0.2:function:mncs.test.canonical_finite_id_caller.v1::call_canonical_finite_type_identity"
+
+FLOW_LOWER_UNIT_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.flow_lower_unit_caller.v1;
+use mncs.compiler.flow.v1 as flow;
+
+fn call_flow_lower_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) -> (result: flow.LoweredUnit) {
+    return flow.lower_unit<4, 32>(pages, stride, total);
+}
+"""
+FLOW_LOWER_UNIT_CALLER = "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit"
+
 DECLARATION_CASES = {
     "parse_use": (batch.TARGET_PARSE_USE_CALLER, batch.PARSE_USE_CALLER_SRC),
     "parse_unit_signatures": (UNIT_CALLER, UNIT_CALLER_SRC),
     "parse_unit": (PARSE_UNIT_CALLER, PARSE_UNIT_CALLER_SRC),
     "check_unit": (CHECK_UNIT_CALLER, CHECK_UNIT_CALLER_SRC),
+    "canonical_finite_type_identity": (CANONICAL_FINITE_ID_CALLER, CANONICAL_FINITE_ID_CALLER_SRC),
     "prove_unit": (PROVE_UNIT_CALLER, PROVE_UNIT_CALLER_SRC),
+    "flow_lower_unit": (FLOW_LOWER_UNIT_CALLER, FLOW_LOWER_UNIT_CALLER_SRC),
 }
 
 USE_FIELDS = (
@@ -169,12 +193,29 @@ CHECK_UNIT_CASES = (
         32,
     ),
 )
+PROVE_UNIT_VALID_RAW = b"mncs 0.19; module m; fn id(x: u64) -> (r: u64) { return x; }"
 PROVE_UNIT_CASES = (
+    ("valid_unit", PROVE_UNIT_VALID_RAW, 32),
+    ("valid_unit_layout_2", PROVE_UNIT_VALID_RAW, 20),
     (
-        "valid_unit",
-        b"mncs 0.19; module m; fn id(x: u64) -> (r: u64) { return x; }",
+        "semantically_invalid_unit",
+        b"mncs 0.19; module m; fn bad(x: u64) -> (r: bool) { return x; }",
         32,
     ),
+    (
+        "finite_enum_unit",
+        b"mncs 0.19; module m; enum Color { Red, Blue } fn pick() -> (r: Color) { return Color.Red; }",
+        32,
+    ),
+)
+CANONICAL_FINITE_ID_RAW = b"mncs 0.19; module alpha.beta.v1; enum TrafficLight { Go, Stop }"
+# module_start..module_end = "alpha.beta.v1" (18..31), name_start..name_end = "TrafficLight" (38..50)
+CANONICAL_FINITE_ID_CASES = (
+    ("distinct_module_and_type", CANONICAL_FINITE_ID_RAW, 32, (18, 31, 38, 50)),
+    ("page_split_module_and_type", CANONICAL_FINITE_ID_RAW, 21, (18, 31, 38, 50)),
+)
+FLOW_LOWER_UNIT_CASES = (
+    ("valid_unit", PROVE_UNIT_VALID_RAW, 32),
     (
         "semantically_invalid_unit",
         b"mncs 0.19; module m; fn bad(x: u64) -> (r: bool) { return x; }",
@@ -191,9 +232,19 @@ def expected_record_name(case):
         return "Unit"
     if case == "check_unit":
         return "UnitCheck"
+    if case == "canonical_finite_type_identity":
+        return "SemanticIdentity"
     if case == "prove_unit":
         return "UnitProve"
+    if case == "flow_lower_unit":
+        return "LoweredUnit"
     raise ValueError(f"unsupported declaration case {case}")
+
+
+def oracle_module_and_function(case):
+    if case == "flow_lower_unit":
+        return "mncs.compiler.flow.v1", "lower_unit"
+    return DECL_MODULE, case
 
 
 def execution_cases(case):
@@ -208,8 +259,12 @@ def execution_cases(case):
         fixtures = ((label, raw, stride, [], None) for label, raw, stride in PARSE_UNIT_CASES)
     elif case == "check_unit":
         fixtures = ((label, raw, stride, [], None) for label, raw, stride in CHECK_UNIT_CASES)
+    elif case == "canonical_finite_type_identity":
+        fixtures = ((label, raw, stride, list(spans), None) for label, raw, stride, spans in CANONICAL_FINITE_ID_CASES)
     elif case == "prove_unit":
         fixtures = ((label, raw, stride, [], None) for label, raw, stride in PROVE_UNIT_CASES)
+    elif case == "flow_lower_unit":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in FLOW_LOWER_UNIT_CASES)
     else:
         raise ValueError(f"unsupported declaration case {case}")
     for label, raw, stride, extra, expected in fixtures:
@@ -221,17 +276,18 @@ def execution_cases(case):
 
 def stage0_results(case):
     type_args = [sem.nat_arg(4), sem.nat_arg(32)]
+    oracle_mod, oracle_fn = oracle_module_and_function(case)
     oracle = batch.single_emit.Stage0ModuleOracle(
-        DECL_MODULE,
+        oracle_mod,
         [ROOT / "src", batch.single_emit.STDLIB_ROOT / "library"],
-        generic_seeds=[(case, type_args)],
+        generic_seeds=[(oracle_fn, type_args)],
         probe_bin=LOCKED_ORACLE_PROBE,
         toolchain_identity_root=LOCKED_ORACLE_ROOT,
     )
     try:
         results = {}
         for label, _, args, expected in execution_cases(case):
-            response = oracle.call(case, args, type_arguments=type_args)
+            response = oracle.call(oracle_fn, args, type_arguments=type_args)
             assert response["status"] == "returned", (label, response)
             record = response["returned"][0]
             value = sem.decode(record)
@@ -242,6 +298,11 @@ def stage0_results(case):
             elif case == "check_unit":
                 assert set(UNIT_CHECK_FIELDS).issubset(value.keys()), (label, value)
                 assert value["ok"] == label.startswith("valid_"), (label, value)
+            elif case == "canonical_finite_type_identity":
+                assert value["valid"] is True and len(value["bytes"]) == 512, (label, value)
+            elif case == "prove_unit":
+                assert value["unit"]["ok"] is True, (label, value["unit"])
+                assert value["ok"] == (label != "semantically_invalid_unit"), (label, value)
             results[label] = (record["record"]["type_identity"], value)
         return results
     finally:
@@ -279,6 +340,16 @@ def run_execution(case, target, artifact_path):
             assert results["valid_local_call"]["returned"] == results["valid_local_call_layout_2"]["returned"], (
                 results["valid_local_call"]["returned"],
                 results["valid_local_call_layout_2"]["returned"],
+            )
+        elif case == "prove_unit":
+            assert results["valid_unit"]["returned"] == results["valid_unit_layout_2"]["returned"], (
+                results["valid_unit"]["returned"],
+                results["valid_unit_layout_2"]["returned"],
+            )
+        elif case == "canonical_finite_type_identity":
+            assert results["distinct_module_and_type"]["returned"] == results["page_split_module_and_type"]["returned"], (
+                results["distinct_module_and_type"]["returned"],
+                results["page_split_module_and_type"]["returned"],
             )
     finally:
         vm.close()
@@ -326,7 +397,8 @@ def run_control(artifact_path):
 
 
 def assert_callable_specialization(emitted, case):
-    identity = f"mncs:0.2:function:{DECL_MODULE}::{case}"
+    mod, fn = oracle_module_and_function(case)
+    identity = f"mncs:0.2:function:{mod}::{fn}"
     specializations = [
         [arg["value"] for arg in native_vm_artifact.flist(function["nat_args"])]
         for function in native_vm_artifact.flist(emitted["functions"])
@@ -342,10 +414,12 @@ def select_sources(case):
         ]
     target, wrapper = DECLARATION_CASES[case]
     sources = batch._segment_sources(batch._lexer_sources())
-    for number, name in ((4, "parser"), (5, "decl")):
+    extra_mods = ((4, "parser"), (5, "decl"), (6, "flow")) if case == "flow_lower_unit" else ((4, "parser"), (5, "decl"))
+    for number, name in extra_mods:
         path = ROOT / "src" / "compiler" / f"{name}.mncs"
         sources.append((f"{number:02}_{path.name}", path, path.read_bytes()))
-    wrapper_id = f"06_{case}_caller.mncs"
+    wrapper_num = 7 if case == "flow_lower_unit" else 6
+    wrapper_id = f"{wrapper_num:02}_{case}_caller.mncs"
     sources.append((wrapper_id, Path(wrapper_id), wrapper.encode()))
     sources.sort(key=lambda entry: entry[0].encode())
     return target, sources
@@ -442,9 +516,10 @@ def run_attempt(case, page_bound, artifact_path, *, step_budget=DEFAULT_STEP_BUD
     if page_bound not in frontier.PROJECT_PROBE_PAGE_TIERS:
         raise ValueError(f"unsupported project page tier {page_bound}")
     manifest = source_manifest(sources)
+    oracle_mod, oracle_fn = oracle_module_and_function(case) if case != "control" else (None, None)
     report = {
         "target": target,
-        "specialization": f"{DECL_MODULE}::{case}<4,32>" if case != "control" else None,
+        "specialization": f"{oracle_mod}::{oracle_fn}<4,32>" if case != "control" else None,
         "compiler_revision": batch.single_emit._git_head(ROOT),
         "emitter_source_sha256": compiler_diagnosis.file_sha256(ROOT / compiler_diagnosis.EMITTER_REL_PATH),
         "project_source_sha256": compiler_diagnosis.file_sha256(ROOT / "src/compiler/project.mncs"),

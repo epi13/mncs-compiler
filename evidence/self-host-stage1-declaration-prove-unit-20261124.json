@@ -1,0 +1,739 @@
+{
+  "schema": "mncs.self-host.stage1-declaration-prove-unit-evidence/1",
+  "recorded_at_utc": "2026-11-25T05:57:19Z",
+  "milestone": {
+    "id": "self_host_stage1_decl_prove_unit_4_32",
+    "deepest_callable_executed": "mncs.compiler.flow.v1::lower_unit<4,32>",
+    "primary_target_executed": "mncs.compiler.decl.v1::prove_unit<4,32>",
+    "first_checkpoint_executed": "mncs.compiler.decl.v1::canonical_finite_type_identity<4,32>",
+    "emitter_entrypoint": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable<2048,1024>",
+    "status": "PASSED",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "stage1_to_stage2_rebuild": "UNKNOWN"
+  },
+  "identities": {
+    "baseline_compiler_revision": "71eb79b1984cabb17180d95e12de9ba5a4725411",
+    "locked_stage0_oracle": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "commit": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "binary_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+      "role": "Locked Stage-0 differential oracle (never mutated)"
+    },
+    "canonical_vm": {
+      "repo": "/home/epi13/Documents/Projects/mncs-vm",
+      "commit": "da99dee282336c5acdc91359b14f477745c77f77",
+      "binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+      "binary_sha256": "37dcfa9270d1a79686ce871e7032d9c33cfc0286e3fac18f0125d1f26a7317c7",
+      "role": "Fresh canonical mncs-vm admission and execution runtime"
+    },
+    "isolated_emitter_transport_probe": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "base_commit": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "borrowed_arena_patch_commit": "8fa2e71ac3f62548ca61ea7b12d8640e85d4fc08",
+      "committed_transport_receipt": "evidence/self-host-stage1-declaration-frontier-20261122.json",
+      "environment_session_id": "ses_30a2f849913eb9c6",
+      "scratch_id": "scratch_81af8c4e0ca32ef980daa6103bf76241",
+      "probe_binary_sha256": "981a1a98c3153f89e06c99235a4b355295bca5ddb9c4ba18a13e0e2104cae014",
+      "role": "Isolated host transport probe for large-project selected-callable native emitter execution (strictly separate from locked Stage-0 oracle and canonical mncs-vm)"
+    },
+    "compiler_sources": {
+      "src/compiler/decl.mncs": "07406d442f9e86f1d4c20b97c1343ddf377675996a3ed4d0807044465ccdf548",
+      "src/compiler/flow.mncs": "fc2a958b35bb22dad2a0a771f3dca76645d5d6fd9c312bbf393a16953bb5c258",
+      "src/compiler/ssa.mncs": "ce37181c1a8d756318c3742a60722d86fc50b02261c7d5edf690d20da2cb3acd",
+      "src/compiler/project.mncs": "e86088aa71943e912c542578d4d342e86d69cc70ab1de7554d590aee02251a5e",
+      "src/compiler/vm_emit.mncs": "3252f23011eca36ad70557ab7b1aa7dfbf3732812ec6939aec9284deb9ef01e7",
+      "tools/native_vm_artifact.py": "f9360bd2f6bda2f7c5412d50ab137ee125face0ba8feab0eaf7406d2201a510c",
+      "tools/test_native_decl_vm_emit.py": "837dbba829697bae9252dc1ffd39f6d99870a4621ad0aba4ca0a04f73d9198d9",
+      "tests/vm_emit_seq_repeat_replace_suite.mncs": "2669a0049fee231b768c672e7b2594479248c5f8c116226b7f58c0f477377a45",
+      ".mncs/verification-obligations.json": "8fe8609a00a1a54ad2d1635e3815be3cb3181d2323eb94e6ffd9323257786185"
+    }
+  },
+  "step1_repeat_and_sequence_replace": {
+    "repeat_lowering": "ssa_kind == 7 -> VM SequenceConstruct (opcode 19) with repeat operand evaluated once and exact element type/count verified",
+    "sequence_replace_lowering": "ssa_kind == 19, operator == 10 -> VM SequenceReplace (opcode 23) preserving original sequence and untouched positions",
+    "focused_vm_fixture": {
+      "cases_passed": 3,
+      "cases_total": 3,
+      "repeat4_artifact_bytes": 4760,
+      "repeat512_artifact_bytes": 6310,
+      "artifact_growth_bytes_for_512_repeat": 1550,
+      "update_pair_artifact_bytes": 6478
+    },
+    "native_regression": {
+      "suite": "tests/vm_emit_seq_repeat_replace_suite.mncs",
+      "obligation_id": "mncs-compiler.vm-emit-seq-repeat-replace-native",
+      "cases_passed": 2,
+      "cases_total": 2,
+      "covered_edit_pass_fail_pass_verified": true,
+      "nested_seq_suite_passed": "3/3",
+      "differential_evidence_unit_tests_passed": "6/6"
+    }
+  },
+  "step2_canonical_finite_type_identity_4_32": {
+    "target": "mncs:0.2:function:mncs.test.canonical_finite_id_caller.v1::call_canonical_finite_type_identity",
+    "specialization": "mncs.compiler.decl.v1::canonical_finite_type_identity<4,32>",
+    "selected_emitter_specialization": [
+      2048,
+      1024
+    ],
+    "total_pages": 1063,
+    "source_closure_sha256": "2f46f749160746bd75b8afd2a11b9953823467873f2150f33e82d9556c563f9e",
+    "emission": {
+      "status": "emitted",
+      "function_count": 8,
+      "record_type_count": 3,
+      "finite_type_count": 0,
+      "block_count": 52,
+      "instruction_count": 194,
+      "artifact_id": "sha256:4faf97449608ca5d3b938e5e72cb1832c6c484102b762d0753b777fe68b1529f",
+      "artifact_sha256": "49f7135b14c3fff632482e9cbf4348e114d76713111c3143ddc8097b785816f4",
+      "artifact_bytes": 141407
+    },
+    "admission": {
+      "status": "admitted",
+      "ok": true,
+      "returncode": 0,
+      "artifact_id": "sha256:4faf97449608ca5d3b938e5e72cb1832c6c484102b762d0753b777fe68b1529f",
+      "vm_build_origin_identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e"
+    },
+    "execution": {
+      "status": "returned",
+      "case_summary": {
+        "status": "passed",
+        "all_expected_match_stage0": true,
+        "expected_count": 2,
+        "observed_count": 2,
+        "passed_count": 2,
+        "passed_cases": [
+          "distinct_module_and_type",
+          "page_split_module_and_type"
+        ],
+        "failed_cases": [],
+        "missing_cases": [],
+        "duplicate_cases": [],
+        "unexpected_cases": []
+      },
+      "cases": {
+        "distinct_module_and_type": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::SemanticIdentity::bytes%3A%5Bbyte%3B%20512%5D%3Blen%3Au64%3Bvalid%3Abool%3B",
+          "matches_stage0": true,
+          "steps": 3925,
+          "max_memory_cells": 21460,
+          "returned_summary": {
+            "valid": true,
+            "len": 48
+          }
+        },
+        "page_split_module_and_type": {
+          "stride": 21,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::SemanticIdentity::bytes%3A%5Bbyte%3B%20512%5D%3Blen%3Au64%3Bvalid%3Abool%3B",
+          "matches_stage0": true,
+          "steps": 3925,
+          "max_memory_cells": 21475,
+          "returned_summary": {
+            "valid": true,
+            "len": 48
+          }
+        }
+      },
+      "vm_peak_rss_bytes": 28839936,
+      "max_memory_cells": 21475
+    },
+    "emitter_probe": {
+      "elapsed_seconds": 76.947,
+      "request_bytes": 24440278,
+      "response_bytes": 2650147,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 5257601024,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "host_peak_rss_bytes": 997773312
+  },
+  "step3_prove_unit_4_32": {
+    "byte_identical_across_two_fresh_runs": true,
+    "artifact_bytes": 30166642,
+    "artifact_sha256": "6f1e962469d8976e70450cb0ce2c074e1220b913e4ba5019de72cc750470f7a2",
+    "artifact_id": "sha256:92cfbb74c975eb1d8aeb4bb6faaad1ee78c3165ae831f751648993b4751535c9",
+    "semantically_invalid_unit_preserves_unit_ok_true": true,
+    "run1": {
+      "target": "mncs:0.2:function:mncs.test.prove_unit_caller.v1::call_prove_unit",
+      "specialization": "mncs.compiler.decl.v1::prove_unit<4,32>",
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "total_pages": 1063,
+      "source_closure_sha256": "e59595c277d2ce6a3cbe7fd33db30418daa171c12ccce14af408494777c5f331",
+      "emission": {
+        "status": "emitted",
+        "function_count": 1153,
+        "record_type_count": 255,
+        "finite_type_count": 55,
+        "block_count": 11639,
+        "instruction_count": 33719,
+        "artifact_id": "sha256:92cfbb74c975eb1d8aeb4bb6faaad1ee78c3165ae831f751648993b4751535c9",
+        "artifact_sha256": "6f1e962469d8976e70450cb0ce2c074e1220b913e4ba5019de72cc750470f7a2",
+        "artifact_bytes": 30166642
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0,
+        "artifact_id": "sha256:92cfbb74c975eb1d8aeb4bb6faaad1ee78c3165ae831f751648993b4751535c9",
+        "vm_build_origin_identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e"
+      },
+      "execution": {
+        "status": "returned",
+        "case_summary": {
+          "status": "passed",
+          "all_expected_match_stage0": true,
+          "expected_count": 4,
+          "observed_count": 4,
+          "passed_count": 4,
+          "passed_cases": [
+            "valid_unit",
+            "valid_unit_layout_2",
+            "semantically_invalid_unit",
+            "finite_enum_unit"
+          ],
+          "failed_cases": [],
+          "missing_cases": [],
+          "duplicate_cases": [],
+          "unexpected_cases": []
+        },
+        "cases": {
+          "valid_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 442304,
+            "max_memory_cells": 39376,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          },
+          "valid_unit_layout_2": {
+            "stride": 20,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 442983,
+            "max_memory_cells": 39414,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          },
+          "semantically_invalid_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 434748,
+            "max_memory_cells": 41981,
+            "returned_summary": {
+              "ok": false,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 58,
+              "err_end": 59
+            }
+          },
+          "finite_enum_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 606984,
+            "max_memory_cells": 95427,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          }
+        },
+        "vm_peak_rss_bytes": 225308672,
+        "max_memory_cells": 95427
+      },
+      "emitter_probe": {
+        "elapsed_seconds": 438.264,
+        "request_bytes": 24435437,
+        "response_bytes": 730415364,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 7228416000,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "host_peak_rss_bytes": 2298580992
+    },
+    "run2": {
+      "target": "mncs:0.2:function:mncs.test.prove_unit_caller.v1::call_prove_unit",
+      "specialization": "mncs.compiler.decl.v1::prove_unit<4,32>",
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "total_pages": 1063,
+      "source_closure_sha256": "e59595c277d2ce6a3cbe7fd33db30418daa171c12ccce14af408494777c5f331",
+      "emission": {
+        "status": "emitted",
+        "function_count": 1153,
+        "record_type_count": 255,
+        "finite_type_count": 55,
+        "block_count": 11639,
+        "instruction_count": 33719,
+        "artifact_id": "sha256:92cfbb74c975eb1d8aeb4bb6faaad1ee78c3165ae831f751648993b4751535c9",
+        "artifact_sha256": "6f1e962469d8976e70450cb0ce2c074e1220b913e4ba5019de72cc750470f7a2",
+        "artifact_bytes": 30166642
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0,
+        "artifact_id": "sha256:92cfbb74c975eb1d8aeb4bb6faaad1ee78c3165ae831f751648993b4751535c9",
+        "vm_build_origin_identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e"
+      },
+      "execution": {
+        "status": "returned",
+        "case_summary": {
+          "status": "passed",
+          "all_expected_match_stage0": true,
+          "expected_count": 4,
+          "observed_count": 4,
+          "passed_count": 4,
+          "passed_cases": [
+            "valid_unit",
+            "valid_unit_layout_2",
+            "semantically_invalid_unit",
+            "finite_enum_unit"
+          ],
+          "failed_cases": [],
+          "missing_cases": [],
+          "duplicate_cases": [],
+          "unexpected_cases": []
+        },
+        "cases": {
+          "valid_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 442304,
+            "max_memory_cells": 39376,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          },
+          "valid_unit_layout_2": {
+            "stride": 20,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 442983,
+            "max_memory_cells": 39414,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          },
+          "semantically_invalid_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 434748,
+            "max_memory_cells": 41981,
+            "returned_summary": {
+              "ok": false,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 58,
+              "err_end": 59
+            }
+          },
+          "finite_enum_unit": {
+            "stride": 32,
+            "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitProve::err_end%3Au64%3Berr_start%3Au64%3Bfn_count%3Au64%3Bobls%3AOblList%3Bok%3Abool%3Btops%3ATopsList%3Bunit%3AUnit%3B",
+            "matches_stage0": true,
+            "steps": 606984,
+            "max_memory_cells": 95427,
+            "returned_summary": {
+              "ok": true,
+              "unit_ok": true,
+              "fn_count": 1,
+              "err_start": 0,
+              "err_end": 0
+            }
+          }
+        },
+        "vm_peak_rss_bytes": 225112064,
+        "max_memory_cells": 95427
+      },
+      "emitter_probe": {
+        "elapsed_seconds": 437.807,
+        "request_bytes": 24435437,
+        "response_bytes": 730415364,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 7229108224,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "host_peak_rss_bytes": 2298449920
+    }
+  },
+  "step4_check_unit_4_32_regression": {
+    "target": "mncs:0.2:function:mncs.test.check_unit_caller.v1::call_check_unit",
+    "specialization": "mncs.compiler.decl.v1::check_unit<4,32>",
+    "selected_emitter_specialization": [
+      2048,
+      1024
+    ],
+    "total_pages": 1063,
+    "source_closure_sha256": "45575dbc8b966b821a00139fbc2853559c147c93e65593da3fe23ed23ca4e488",
+    "emission": {
+      "status": "emitted",
+      "function_count": 450,
+      "record_type_count": 110,
+      "finite_type_count": 27,
+      "block_count": 5620,
+      "instruction_count": 19303,
+      "artifact_id": "sha256:b9a57de4e13de867ee22002e4356b40bd5931a8124d4b0b054aed334bf315015",
+      "artifact_sha256": "642e9e3f786e272deb7483d952993c181194df4fb23d617686f1971734bbce5b",
+      "artifact_bytes": 15383870
+    },
+    "admission": {
+      "status": "admitted",
+      "ok": true,
+      "returncode": 0,
+      "artifact_id": "sha256:b9a57de4e13de867ee22002e4356b40bd5931a8124d4b0b054aed334bf315015",
+      "vm_build_origin_identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e"
+    },
+    "execution": {
+      "status": "returned",
+      "case_summary": {
+        "status": "passed",
+        "all_expected_match_stage0": true,
+        "expected_count": 5,
+        "observed_count": 5,
+        "passed_count": 5,
+        "passed_cases": [
+          "valid_local_call",
+          "valid_local_call_layout_2",
+          "duplicate_fn_name",
+          "unresolved_reference",
+          "malformed_syntax"
+        ],
+        "failed_cases": [],
+        "missing_cases": [],
+        "duplicate_cases": [],
+        "unexpected_cases": []
+      },
+      "cases": {
+        "valid_local_call": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitCheck::err_end%3Au64%3Berr_start%3Au64%3Bexpr_count%3Au64%3Bfn_count%3Au64%3Bir_ok%3Abool%3Bok%3Abool%3Bstage%3Au64%3B",
+          "matches_stage0": true,
+          "steps": 327955,
+          "max_memory_cells": 26517,
+          "returned_summary": {
+            "err_end": 0,
+            "err_start": 0,
+            "expr_count": 5,
+            "fn_count": 2,
+            "ir_ok": true,
+            "ok": true,
+            "stage": 4
+          }
+        },
+        "valid_local_call_layout_2": {
+          "stride": 28,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitCheck::err_end%3Au64%3Berr_start%3Au64%3Bexpr_count%3Au64%3Bfn_count%3Au64%3Bir_ok%3Abool%3Bok%3Abool%3Bstage%3Au64%3B",
+          "matches_stage0": true,
+          "steps": 324181,
+          "max_memory_cells": 26416,
+          "returned_summary": {
+            "err_end": 0,
+            "err_start": 0,
+            "expr_count": 5,
+            "fn_count": 2,
+            "ir_ok": true,
+            "ok": true,
+            "stage": 4
+          }
+        },
+        "duplicate_fn_name": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitCheck::err_end%3Au64%3Berr_start%3Au64%3Bexpr_count%3Au64%3Bfn_count%3Au64%3Bir_ok%3Abool%3Bok%3Abool%3Bstage%3Au64%3B",
+          "matches_stage0": true,
+          "steps": 60356,
+          "max_memory_cells": 24853,
+          "returned_summary": {
+            "err_end": 64,
+            "err_start": 63,
+            "expr_count": 0,
+            "fn_count": 0,
+            "ir_ok": false,
+            "ok": false,
+            "stage": 1
+          }
+        },
+        "unresolved_reference": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitCheck::err_end%3Au64%3Berr_start%3Au64%3Bexpr_count%3Au64%3Bfn_count%3Au64%3Bir_ok%3Abool%3Bok%3Abool%3Bstage%3Au64%3B",
+          "matches_stage0": true,
+          "steps": 46248,
+          "max_memory_cells": 25345,
+          "returned_summary": {
+            "err_end": 65,
+            "err_start": 58,
+            "expr_count": 0,
+            "fn_count": 0,
+            "ir_ok": false,
+            "ok": false,
+            "stage": 2
+          }
+        },
+        "malformed_syntax": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.decl.v1::UnitCheck::err_end%3Au64%3Berr_start%3Au64%3Bexpr_count%3Au64%3Bfn_count%3Au64%3Bir_ok%3Abool%3Bok%3Abool%3Bstage%3Au64%3B",
+          "matches_stage0": true,
+          "steps": 35907,
+          "max_memory_cells": 19638,
+          "returned_summary": {
+            "err_end": 62,
+            "err_start": 61,
+            "expr_count": 0,
+            "fn_count": 0,
+            "ir_ok": false,
+            "ok": false,
+            "stage": 0
+          }
+        }
+      },
+      "vm_peak_rss_bytes": 124452864,
+      "max_memory_cells": 26517
+    },
+    "emitter_probe": {
+      "elapsed_seconds": 219.719,
+      "request_bytes": 24435418,
+      "response_bytes": 376321835,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 5838368768,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "host_peak_rss_bytes": 1236160512
+  },
+  "step4_ambient_verification": {
+    "enter1_session_id": "ses_fef850d1e92d3d01",
+    "enter2_session_id": "ses_88dc71c1e8e384eb",
+    "enter1_compiler_investigation": {
+      "bootstrap": {
+        "matrix": "evidence/SELF-HOST-MATRIX.json",
+        "missing_rebuild_evidence_count": 3,
+        "stage1_claimed": false,
+        "stage1_to_stage2_rebuild": "UNKNOWN",
+        "stage2_claimed": false,
+        "supporting_evidence": "evidence/self-host-stage1-declaration-check-unit-20261123.json"
+      },
+      "delivery_completeness": "partial",
+      "diagnosis": {
+        "callable": null,
+        "error_code": 0,
+        "error_label": "ok",
+        "observed_nominal": null,
+        "observed_type": null,
+        "ok": true,
+        "source": null,
+        "ssa_op": "none"
+      },
+      "freshness": "current",
+      "measurements": {
+        "heavyweight_compile_launched": false,
+        "provider_launches": 1
+      },
+      "provenance": {
+        "artifact_id": "sha256:f4d38886e46621a15ed13158979e11641203e61799fc5c74c49b2b915f3ab642",
+        "compiler": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+        "failing_phase": null,
+        "last_completed_phase": "execution",
+        "owner": "mncs-compiler:src/compiler/vm_emit.mncs",
+        "revision": "71eb79b1984c",
+        "specialization": "mncs.compiler.flow.v1::lower_unit<4,32>",
+        "target": "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit"
+      },
+      "providers": {
+        "debug": "available_demand_driven",
+        "doctor": "available",
+        "doctor_findings_count": 2,
+        "language_service": "unavailable"
+      },
+      "reused": true,
+      "status": "executed",
+      "unavailable_providers": [
+        "mncs-language-service"
+      ]
+    },
+    "enter2_compiler_investigation": {
+      "bootstrap": {
+        "matrix": "evidence/SELF-HOST-MATRIX.json",
+        "missing_rebuild_evidence_count": 3,
+        "stage1_claimed": false,
+        "stage1_to_stage2_rebuild": "UNKNOWN",
+        "stage2_claimed": false,
+        "supporting_evidence": "evidence/self-host-stage1-declaration-check-unit-20261123.json"
+      },
+      "delivery_completeness": "partial",
+      "diagnosis": {
+        "callable": null,
+        "error_code": 0,
+        "error_label": "ok",
+        "observed_nominal": null,
+        "observed_type": null,
+        "ok": true,
+        "source": null,
+        "ssa_op": "none"
+      },
+      "freshness": "current",
+      "measurements": {
+        "heavyweight_compile_launched": false,
+        "provider_launches": 1
+      },
+      "provenance": {
+        "artifact_id": "sha256:f4d38886e46621a15ed13158979e11641203e61799fc5c74c49b2b915f3ab642",
+        "compiler": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+        "failing_phase": null,
+        "last_completed_phase": "execution",
+        "owner": "mncs-compiler:src/compiler/vm_emit.mncs",
+        "revision": "71eb79b1984c",
+        "specialization": "mncs.compiler.flow.v1::lower_unit<4,32>",
+        "target": "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit"
+      },
+      "providers": {
+        "debug": "available_demand_driven",
+        "doctor": "available",
+        "doctor_findings_count": 2,
+        "language_service": "unavailable"
+      },
+      "reused": true,
+      "status": "executed",
+      "unavailable_providers": [
+        "mncs-language-service"
+      ]
+    },
+    "enter1_verification_summary": {
+      "blockers": 0,
+      "current": 8,
+      "failed": 0,
+      "obligations": 66
+    },
+    "enter2_verification_summary": {
+      "blockers": 0,
+      "current": 8,
+      "failed": 0,
+      "obligations": 66
+    }
+  },
+  "step5_flow_lower_unit_4_32_probe": {
+    "target": "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit",
+    "specialization": "mncs.compiler.flow.v1::lower_unit<4,32>",
+    "selected_emitter_specialization": [
+      2048,
+      1024
+    ],
+    "total_pages": 1101,
+    "source_closure_sha256": "9d2d4900c0491b135b44ca8136f809cb1be6709a37b159f8552f96949fa2d1e6",
+    "emission": {
+      "status": "emitted",
+      "function_count": 1216,
+      "record_type_count": 273,
+      "finite_type_count": 60,
+      "block_count": 12028,
+      "instruction_count": 35189,
+      "artifact_id": "sha256:f4d38886e46621a15ed13158979e11641203e61799fc5c74c49b2b915f3ab642",
+      "artifact_sha256": "0f611ccdabe2d3f2ca501ddf69612385bc894c0e152431ab57abb050cc2e374e",
+      "artifact_bytes": 31224388
+    },
+    "admission": {
+      "status": "admitted",
+      "ok": true,
+      "returncode": 0,
+      "artifact_id": "sha256:f4d38886e46621a15ed13158979e11641203e61799fc5c74c49b2b915f3ab642",
+      "vm_build_origin_identity": "sha256:5696abd0ffaea594a7dfaf5448847cab14068cf09050934a5f89ebed5b6dfc1e"
+    },
+    "execution": {
+      "status": "returned",
+      "case_summary": {
+        "status": "passed",
+        "all_expected_match_stage0": true,
+        "expected_count": 2,
+        "observed_count": 2,
+        "passed_count": 2,
+        "passed_cases": [
+          "valid_unit",
+          "semantically_invalid_unit"
+        ],
+        "failed_cases": [],
+        "missing_cases": [],
+        "duplicate_cases": [],
+        "unexpected_cases": []
+      },
+      "cases": {
+        "valid_unit": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.flow.v1::LoweredUnit::block_count%3Au64%3Bdiagnostics%3ADiagnosticList%3Bfunctions%3AFunctionList%3Bgraph_ok%3Abool%3Bproof%3Amncs%3A0.2%3Arecord-type%3Amncs.compiler.decl.v1%3A%3AUnitProve%3A%3Aerr_end%253Au64%253Berr_start%253Au64%253Bfn_count%253Au64%253Bobls%253AOblList%253Bok%253Abool%253Btops%253ATopsList%253Bunit%253AUnit%253B%3Bvalid%3Abool%3B",
+          "matches_stage0": true,
+          "steps": 460821,
+          "max_memory_cells": 39441,
+          "returned_summary": {
+            "valid": true,
+            "proof_ok": true,
+            "proof_unit_ok": true,
+            "proof_err_start": 0,
+            "proof_err_end": 0
+          }
+        },
+        "semantically_invalid_unit": {
+          "stride": 32,
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.flow.v1::LoweredUnit::block_count%3Au64%3Bdiagnostics%3ADiagnosticList%3Bfunctions%3AFunctionList%3Bgraph_ok%3Abool%3Bproof%3Amncs%3A0.2%3Arecord-type%3Amncs.compiler.decl.v1%3A%3AUnitProve%3A%3Aerr_end%253Au64%253Berr_start%253Au64%253Bfn_count%253Au64%253Bobls%253AOblList%253Bok%253Abool%253Btops%253ATopsList%253Bunit%253AUnit%253B%3Bvalid%3Abool%3B",
+          "matches_stage0": true,
+          "steps": 434764,
+          "max_memory_cells": 42048,
+          "returned_summary": {
+            "valid": false,
+            "proof_ok": false,
+            "proof_unit_ok": true,
+            "proof_err_start": 58,
+            "proof_err_end": 59
+          }
+        }
+      },
+      "vm_peak_rss_bytes": 231837696,
+      "max_memory_cells": 42048
+    },
+    "emitter_probe": {
+      "elapsed_seconds": 483.202,
+      "request_bytes": 25304901,
+      "response_bytes": 767130534,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 7431266304,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "host_peak_rss_bytes": 2411180032
+  }
+}

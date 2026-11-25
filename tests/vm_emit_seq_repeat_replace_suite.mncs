@@ -1,0 +1,151 @@
+mncs 0.18;
+module tests.compiler_vm_emit_seq_repeat_replace;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+fn invalid_sem_id() -> (result: decl.SemanticIdentity) {
+    return decl.SemanticIdentity { bytes: [0 as byte; 512], len: 0, valid: false };
+}
+
+fn byte_ty() -> (result: vm_emit.VmType) {
+    return vm_emit.byte_vm_type();
+}
+
+fn u64_ty() -> (result: vm_emit.VmType) {
+    return vm_emit.int_vm_type(64, false);
+}
+
+fn exact_byte_seq_ty(length: u64) -> (result: vm_emit.VmType) {
+    return vm_emit.exact_scalar_seq_vm_type(vm_emit.byte_vm_type(), length);
+}
+
+fn upto_byte_seq_ty(length: u64) -> (result: vm_emit.VmType) {
+    return vm_emit.seq_view_up_to_type(exact_byte_seq_ty(length));
+}
+
+fn make_inst(kind: u64, operator: u64, argc: u64, inputs: ssa.IdList) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: 10, sequence: 0, kind: kind, operator: operator, result: 20,
+        ty: decl.SemType.TSeq, inputs: inputs, argc: argc,
+        params: decl.BindList.BNil, identity: invalid_sem_id(),
+        nominal_identity: invalid_sem_id(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil,
+        capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 0
+    };
+}
+
+record IdCountState { rest: ssa.IdList, count: u64, all_match: bool, expected_id: u64 }
+fn count_matching_ids(ids: ssa.IdList, expected_id: u64) -> (result: IdCountState) {
+    let init: IdCountState = IdCountState { rest: ids, count: 0, all_match: true, expected_id: expected_id };
+    iterate i up_to 1024 carrying st: IdCountState = init {
+        if vm_emit.id_list_empty(st.rest) { return st; }
+        next st = count_matching_ids_step(st);
+    }
+    return st;
+}
+fn count_matching_ids_step(st: IdCountState) -> (result: IdCountState) {
+    return match st.rest {
+        ssa.IdList.INil => st,
+        ssa.IdList.ICons { head: h, tail: t } => IdCountState {
+            rest: t,
+            count: st.count + 1,
+            all_match: st.all_match && h.value == st.expected_id,
+            expected_id: st.expected_id
+        }
+    };
+}
+
+test repeat_lowers_512_byte_seed_and_rejects_malformed_metadata() -> (result: TestResult) {
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 1, ty: byte_ty() },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 2, ty: u64_ty() },
+            tail: vm_emit.VmValueList.VVNil
+        }
+    };
+    let one_byte_input: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil };
+    let two_inputs: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: one_byte_input };
+    let wrong_elem_input: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 2 }, tail: ssa.IdList.INil };
+
+    let valid_inst: ssa.Instruction = make_inst(7, 512, 1, one_byte_input);
+    let res_ok: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, valid_inst, exact_byte_seq_ty(512));
+    let id_check: IdCountState = count_matching_ids(res_ok.inst.inputs, 1);
+
+    let bad_count: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, make_inst(7, 256, 1, one_byte_input), exact_byte_seq_ty(512));
+    let bad_argc: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, make_inst(7, 512, 2, one_byte_input), exact_byte_seq_ty(512));
+    let bad_inputs: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, make_inst(7, 512, 1, two_inputs), exact_byte_seq_ty(512));
+    let bad_elem_ty: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, make_inst(7, 4, 1, wrong_elem_input), exact_byte_seq_ty(4));
+    let bad_bound_kind: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(val_types, make_inst(7, 4, 1, one_byte_input), upto_byte_seq_ty(4));
+
+    let passed: bool = res_ok.ok && res_ok.inst.opcode == 19 && res_ok.inst.imm_u64 == 512
+        && id_check.count == 512 && id_check.all_match
+        && !(bad_count.ok) && bad_count.error_code == 7
+        && !(bad_argc.ok) && bad_argc.error_code == 7
+        && !(bad_inputs.ok) && bad_inputs.error_code == 7
+        && !(bad_elem_ty.ok) && bad_elem_ty.error_code == 7
+        && !(bad_bound_kind.ok) && bad_bound_kind.error_code == 4;
+    return from_assertion(equals_bool(true, passed, 7501));
+}
+
+test sequence_replace_lowers_512_byte_update_and_rejects_malformed_metadata() -> (result: TestResult) {
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 1, ty: exact_byte_seq_ty(512) },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 2, ty: u64_ty() },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 3, ty: byte_ty() },
+                tail: vm_emit.VmValueList.VVCons {
+                    head: vm_emit.VmValue { id: 4, ty: exact_byte_seq_ty(4) },
+                    tail: vm_emit.VmValueList.VVNil
+                }
+            }
+        }
+    };
+    let good_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 1 },
+        tail: ssa.IdList.ICons {
+            head: ssa.Id { value: 2 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil }
+        }
+    };
+    let bad_seq_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 4 },
+        tail: ssa.IdList.ICons {
+            head: ssa.Id { value: 2 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil }
+        }
+    };
+    let bad_idx_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 1 },
+        tail: ssa.IdList.ICons {
+            head: ssa.Id { value: 3 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil }
+        }
+    };
+    let bad_elem_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 1 },
+        tail: ssa.IdList.ICons {
+            head: ssa.Id { value: 2 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 2 }, tail: ssa.IdList.INil }
+        }
+    };
+
+    let res_ok: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, good_inputs), exact_byte_seq_ty(512));
+    let bad_op: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 9, 3, good_inputs), exact_byte_seq_ty(512));
+    let bad_seq: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, bad_seq_inputs), exact_byte_seq_ty(512));
+    let bad_idx: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, bad_idx_inputs), exact_byte_seq_ty(512));
+    let bad_elem: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, bad_elem_inputs), exact_byte_seq_ty(512));
+
+    let passed: bool = res_ok.ok && res_ok.inst.opcode == 23 && res_ok.inst.imm_u64 == 512
+        && !(bad_op.ok) && bad_op.error_code == 7
+        && !(bad_seq.ok) && bad_seq.error_code == 7
+        && !(bad_idx.ok) && bad_idx.error_code == 7
+        && !(bad_elem.ok) && bad_elem.error_code == 7;
+    return from_assertion(equals_bool(true, passed, 7502));
+}

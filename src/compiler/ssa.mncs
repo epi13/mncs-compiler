@@ -198,7 +198,7 @@ record SsaBuild {
     supported: bool,
     initial_failure_kind: u64
 }
-record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, ok: bool }
+record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, known_identity: decl.SemanticIdentity, ok: bool }
 record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_function: u64, first_bad_block: u64, first_bad_kind: u64 }
 record FunctionShape { blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
 record BlockShapeScan { rest: SsaBlockList, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64, value_limit: u64 }
@@ -268,8 +268,9 @@ fn sequence_value_type(ty: decl.SemType) -> (result: bool) {
 }
 fn nominal_value_type_bound<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
     let imported: decl.NominalLookup = decl.nominal_identity_at<P, N>(pages, stride, total, nominals, start, end);
+    if imported.found && imported.identity.valid { return true; }
     let local: decl.NominalLookup = decl.nominal_identity_by_name<P, N>(pages, stride, total, nominals, start, end);
-    return (imported.found && imported.identity.valid) || (local.found && local.identity.valid);
+    return local.found && local.identity.valid;
 }
 
 // End-to-end local-unit path: prove and lower the source with Flow, derive
@@ -299,16 +300,19 @@ fn lower_value_ssa_with_imported_records<P: Nat, N: Nat>(pages: [[byte; up_to N]
     return lower_value_ssa_with_imported_schemas<P, N>(pages, stride, total, lowered, nominals, imported_records, decl.ImportedEnumList.IENil);
 }
 fn lower_value_ssa_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: ValueSsaSummary) {
+    return lower_value_ssa_with_known_identity<P, N>(pages, stride, total, lowered, nominals, imported_records, imported_enums, invalid_identity());
+}
+fn lower_value_ssa_with_known_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, known_identity: decl.SemanticIdentity) -> (result: ValueSsaSummary) {
     if !(flow.ssa_flow_valid(lowered)) {
         return empty_ssa_summary(false);
     }
-    let st: FunctionWalk = lower_ssa_functions<P, N>(pages, stride, total, lowered, nominals, imported_records, imported_enums);
+    let st: FunctionWalk = lower_ssa_functions<P, N>(pages, stride, total, lowered, nominals, imported_records, imported_enums, known_identity);
     let functions: FunctionList = reverse_functions<P, N>(pages, stride, total, st.acc, st.count);
     let summary: FunctionSummaryScan = summarize_functions<P, N>(pages, stride, total, functions, st.count, st.ok && st.count == lowered.proof.fn_count && function_list_ended<P, N>(pages, stride, total, st));
     return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, branch_count: summary.branches, jump_count: summary.jumps, return_count: summary.returns, failure_count: summary.failures, switch_count: summary.switches, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
 }
-fn lower_ssa_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: FunctionWalk) {
-    let initial: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, nominals: nominals, imported_records: imported_records, imported_enums: imported_enums, ok: true };
+fn lower_ssa_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, known_identity: decl.SemanticIdentity) -> (result: FunctionWalk) {
+    let initial: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, nominals: nominals, imported_records: imported_records, imported_enums: imported_enums, known_identity: known_identity, ok: true };
     iterate i up_to 1024 carrying st: FunctionWalk = initial {
         if st.count >= lowered.proof.fn_count || ssa_decl_function_list_empty(st.fns) { return st; }
         next st = lower_function_step<P, N>(pages, stride, total, st, lowered.proof.unit.header);
@@ -384,6 +388,39 @@ fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
 }
 fn ssa_function_list_empty(functions: FunctionList) -> (result: bool) {
     return match functions { FunctionList.FNil => true, FunctionList.FCons { head: head, tail: tail } => false };
+}
+fn ssa_function_head_matches_id(functions: FunctionList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    return match functions { FunctionList.FNil => false, FunctionList.FCons { head: f, tail: t } => decl.semantic_identity_equal(f.identity, wanted) };
+}
+fn ssa_function_head(functions: FunctionList) -> (result: Function) {
+    return match functions { FunctionList.FNil => empty_ssa_function(), FunctionList.FCons { head: f, tail: t } => f };
+}
+fn ssa_function_tail(functions: FunctionList) -> (result: FunctionList) {
+    return match functions { FunctionList.FNil => FunctionList.FNil, FunctionList.FCons { head: f, tail: t } => t };
+}
+fn value_ssa_has_fn_id(summary: ValueSsaSummary, wanted: decl.SemanticIdentity) -> (result: bool) {
+    iterate chunk up_to 64 carrying outer: FunctionList = summary.functions {
+        iterate i up_to 1024 carrying rest: FunctionList = outer {
+            if ssa_function_list_empty(rest) { return false; }
+            if ssa_function_head_matches_id(rest, wanted) { return true; }
+            next rest = ssa_function_tail(rest);
+        }
+        if ssa_function_list_empty(rest) { return false; }
+        next outer = rest;
+    }
+    return false;
+}
+fn value_ssa_find_fn_by_id(summary: ValueSsaSummary, wanted: decl.SemanticIdentity) -> (result: ValueSsaFunctionLookup) {
+    iterate chunk up_to 64 carrying outer: FunctionList = summary.functions {
+        iterate i up_to 1024 carrying rest: FunctionList = outer {
+            if ssa_function_list_empty(rest) { return ValueSsaFunctionLookup { found: false, function: empty_ssa_function() }; }
+            if ssa_function_head_matches_id(rest, wanted) { return ValueSsaFunctionLookup { found: true, function: ssa_function_head(rest) }; }
+            next rest = ssa_function_tail(rest);
+        }
+        if ssa_function_list_empty(rest) { return ValueSsaFunctionLookup { found: false, function: empty_ssa_function() }; }
+        next outer = rest;
+    }
+    return ValueSsaFunctionLookup { found: false, function: empty_ssa_function() };
 }
 // Count the dedicated loop op kinds without changing ValueSsaSummary.
 // Complete is false if any bounded function, block, or instruction scan truncates.
@@ -551,8 +588,8 @@ fn lower_flow_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     return finish_function_step<P, N>(pages, stride, total, st, header, fn_decl, fns, cfg);
 }
 fn finish_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionWalk, header: parser.Header, fn_decl: decl.FnDecl, fns: decl.FnList, cfg: flow.FunctionFlow) -> (result: FunctionWalk) {
-    let lowered: Function = lower_function<P, N>(pages, stride, total, header, fn_decl, cfg, st.lowered.proof.unit.records, st.lowered.proof.unit.enums, st.nominals, st.imported_records, st.imported_enums);
-    return FunctionWalk { fns: fns, lowered: st.lowered, index: st.index + 1, acc: FunctionList.FCons { head: lowered, tail: st.acc }, count: st.count + 1, nominals: st.nominals, imported_records: st.imported_records, imported_enums: st.imported_enums, ok: st.ok && lowered.verified };
+    let lowered: Function = lower_function_with_identity<P, N>(pages, stride, total, header, fn_decl, cfg, st.lowered.proof.unit.records, st.lowered.proof.unit.enums, st.nominals, st.imported_records, st.imported_enums, st.known_identity);
+    return FunctionWalk { fns: fns, lowered: st.lowered, index: st.index + 1, acc: FunctionList.FCons { head: lowered, tail: st.acc }, count: st.count + 1, nominals: st.nominals, imported_records: st.imported_records, imported_enums: st.imported_enums, known_identity: st.known_identity, ok: st.ok && lowered.verified };
 }
 fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, function_count: u64) -> (result: FunctionList) {
     iterate i up_to 1024 carrying st: FunctionReverse = FunctionReverse { rest: functions, acc: FunctionList.FNil } {
@@ -581,8 +618,17 @@ fn lower_flow_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn lower_flow_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, walk: SsaBlockWalk) -> (result: SsaBlockWalk) {
     return SsaBlockWalk { build: lower_block_step<P, N>(pages, stride, total, walk.build), processed: walk.processed + 1 };
 }
+fn resolve_function_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fn_decl: decl.FnDecl, known_identity: decl.SemanticIdentity) -> (result: decl.SemanticIdentity) {
+    if decl.function_identity_matches<P, N>(pages, stride, total, header.module_start, header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end, known_identity) {
+        return known_identity;
+    }
+    return decl.canonical_function_identity<P, N>(pages, stride, total, header.module_start, header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end);
+}
 fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fn_decl: decl.FnDecl, cfg: flow.FunctionFlow, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: Function) {
-    let identity: decl.SemanticIdentity = decl.canonical_function_identity<P, N>(pages, stride, total, header.module_start, header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end);
+    return lower_function_with_identity<P, N>(pages, stride, total, header, fn_decl, cfg, records, enums, nominals, imported_records, imported_enums, invalid_identity());
+}
+fn lower_function_with_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fn_decl: decl.FnDecl, cfg: flow.FunctionFlow, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, known_identity: decl.SemanticIdentity) -> (result: Function) {
+    let identity: decl.SemanticIdentity = resolve_function_identity<P, N>(pages, stride, total, header, fn_decl, known_identity);
     let parameters: ParamBuild = function_parameters<P, N>(pages, stride, total, fn_decl.sig.params, fn_decl.sig.generics, records, enums, nominals);
     let result_type: decl.SemType = function_result_type<P, N>(pages, stride, total, fn_decl.sig.results, fn_decl.sig.generics, records, enums, nominals);
     let cfg_ok: bool = flow.ssa_cfg_verified(cfg);
@@ -615,8 +661,13 @@ fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
         blocks: blocks, block_count: block_count, values: st.values, value_count: st.next_value,
         supported: st.supported && blocks_complete, verified: false
     };
-    let verified: bool = candidate.supported && verify_function_with_flow<P, N>(pages, stride, total, candidate, cfg);
+    let local_decls: LocalTypeDecls = LocalTypeDecls { valid: true, records: records, enums: enums };
+    let verified: bool = candidate.supported && verify_function_with_flow_and_decls<P, N>(pages, stride, total, candidate, cfg, local_decls);
     return Function { ..candidate, verified: verified };
+}
+record LocalTypeDecls { valid: bool, records: decl.RecordList, enums: decl.EnumList }
+fn empty_local_type_decls() -> (result: LocalTypeDecls) {
+    return LocalTypeDecls { valid: false, records: decl.RecordList.RNil, enums: decl.EnumList.GNil };
 }
 record ValueNominalCollect { rest: ValueList, nominals: decl.NominalTypeIdentityList, acc: decl.NominalTypeIdentityList }
 record NominalSpanCheck { rest: decl.NominalTypeIdentityList, start: u64, end: u64, found: bool }
@@ -1709,8 +1760,18 @@ fn lower_match_payload_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
     return PayloadLowerBuild { ..st, rest: rest, env: Environment.EnvCons { head: mapped, tail: st.env }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, ok: supported_value_type<P, N>(pages, stride, total, value.ty, st.nominals) };
 }
 record PayloadFieldFind { rest: decl.BindList, start: u64, end: u64, found: bool, field: decl.Bind }
+fn pop_call_args(stack: ValueStack, count: u64) -> (result: PopArgs) {
+    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: stack, remaining: count, arguments: IdList.INil, ok: true } {
+        if !(popped.ok) || popped.remaining == 0 { return popped; }
+        next popped = pop_call_arg(popped);
+    }
+    return popped;
+}
 fn find_match_payload_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.BindList, start: u64, end: u64) -> (result: PayloadFieldFind) {
-    iterate i up_to 1024 carrying st: PayloadFieldFind = PayloadFieldFind { rest: fields, start: start, end: end, found: false, field: decl.Bind { start: 0, end: 0, ty: decl.SemType.TPoison } } { next st = find_match_payload_field_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: PayloadFieldFind = PayloadFieldFind { rest: fields, start: start, end: end, found: false, field: decl.Bind { start: 0, end: 0, ty: decl.SemType.TPoison } } {
+        if st.found || bind_list_empty_local(st.rest) { return st; }
+        next st = find_match_payload_field_step<P, N>(pages, stride, total, st);
+    }
     return st;
 }
 fn find_match_payload_field_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: PayloadFieldFind) -> (result: PayloadFieldFind) {
@@ -1725,7 +1786,7 @@ fn match_payload_wildcard<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     return source.byte_at_global<P, N>(pages, stride, total, start) == 95;
 }
 fn lower_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, variant_start: u64, variant_end: u64, field_count: u64, params: decl.BindList, start: u64, end: u64) -> (result: ExprBuild) {
-    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: field_count, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    let popped: PopArgs = pop_call_args(st.stack, field_count);
     let nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, st.nominals, ty);
     let shape_ok: bool = popped.ok && popped.remaining == 0 && id_count<P, N>(pages, stride, total, popped.arguments) == field_count && bind_count<P, N>(pages, stride, total, params) == field_count;
     let fields_ok: bool = call_argument_types_match<P, N>(pages, stride, total, st.values, popped.arguments, params) && enum_construct_source_valid<P, N>(pages, stride, total, ty, st.nominals, variant_start, variant_end, params, start, end);
@@ -1735,7 +1796,7 @@ fn lower_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && supported_value_type<P, N>(pages, stride, total, ty, st.nominals), failure_op: st.failure_op };
 }
 fn lower_record_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, type_start: u64, type_end: u64, has_base: bool, field_count: u64, params: decl.BindList, start: u64, end: u64) -> (result: ExprBuild) {
-    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: field_count, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    let popped: PopArgs = pop_call_args(st.stack, field_count);
     if has_base { return lower_record_update<P, N>(pages, stride, total, st, rest, ty, type_start, type_end, field_count, params, start, end, popped); }
     let nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, st.nominals, ty);
     let shape_ok: bool = popped.ok && popped.remaining == 0 && id_count<P, N>(pages, stride, total, popped.arguments) == field_count && bind_count<P, N>(pages, stride, total, params) == field_count;
@@ -1931,7 +1992,7 @@ fn emit_binary<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
 // name span in the binding fields. Operand typing is the verifier's job
 // (verify_op_instruction), mirroring call lowering.
 fn lower_top_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, slot: u64, argc: u64, ns: u64, ne: u64, identity: decl.SemanticIdentity, start: u64, end: u64) -> (result: ExprBuild) {
-    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    let popped: PopArgs = pop_call_args(st.stack, argc);
     if !(popped.ok) || popped.remaining != 0 || argc != decl.op_arity(slot) || !(identity.valid) { return ExprBuild { ..st, rest: rest, ok: false }; }
     if slot == 6 { return lower_sequence_index<P, N>(pages, stride, total, st, rest, ty, ns, ne, identity, start, end); }
     if slot == 7 { return lower_scalar_cast<P, N>(pages, stride, total, st, rest, ty, ns, ne, identity, start, end); }
@@ -2081,7 +2142,7 @@ fn emit_scalar_cast<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && valid, failure_op: select(st.failure_op > 0, st.failure_op, select(valid, 0, 3)) };
 }
 fn lower_call<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: ExprBuild) {
-    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    let popped: PopArgs = pop_call_args(st.stack, argc);
     if !(popped.ok) || popped.remaining != 0 || !(identity.valid) || !(decl.signature_identity_valid<P, N>(pages, stride, total, effects, capabilities)) { return ExprBuild { ..st, rest: rest, ok: false }; }
     // Stage-0 keeps signature binds in reverse source order. SSA inputs are
     // restored to source order when the evaluated arguments are popped, so
@@ -2319,21 +2380,25 @@ fn add_iteration_branch_edges<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
 }
 
 fn verify_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
-    if !(verify_function_base<P, N>(pages, stride, total, function)) { return false; }
     let unit: decl.Unit = decl.parse_unit<P, N>(pages, stride, total);
     if !(unit.ok) { return false; }
+    let local_decls: LocalTypeDecls = LocalTypeDecls { valid: true, records: unit.records, enums: unit.enums };
+    if !(verify_function_base_with_decls<P, N>(pages, stride, total, function, local_decls)) { return false; }
     let located: SourceFunctionLocator = locate_source_function<P, N>(pages, stride, total, unit.fns, unit.header, function.identity);
     if !(located.found) { return false; }
     if !(located.contains_iteration) { return true; }
     return verify_function_source_flow<P, N>(pages, stride, total, function, located.matched_index);
 }
 fn verify_function_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
+    return verify_function_base_with_decls<P, N>(pages, stride, total, function, empty_local_type_decls());
+}
+fn verify_function_base_with_decls<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, decls: LocalTypeDecls) -> (result: bool) {
     // CP-0021: fail closed on a non-canonical page composition, mirroring
     // the parse_unit gate; project-chained lowering trusts build time.
     if source.validate_pages<P, N>(pages, stride, total) != 0 { return false; }
     if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<P, N>(pages, stride, total, function.result_type, function.nominals)) || function.block_count == 0 || function.block_count > 1024 || function.value_count == 0 || function.value_count > 8192 { return false; }
     if !(verify_value_ids<P, N>(pages, stride, total, function)) || !(verify_function_inputs<P, N>(pages, stride, total, function)) { return false; }
-    if !(verify_blocks<P, N>(pages, stride, total, function, function.blocks)) || !(verify_definition_counts<P, N>(pages, stride, total, function)) { return false; }
+    if !(verify_blocks<P, N>(pages, stride, total, function, function.blocks, decls)) || !(verify_definition_counts<P, N>(pages, stride, total, function)) { return false; }
     return true;
 }
 record SourceFunctionLocator { rest: decl.FnList, header: parser.Header, wanted: decl.SemanticIdentity, index: u64, found: bool, matched_index: u64, contains_iteration: bool }
@@ -2354,8 +2419,7 @@ fn locate_source_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     };
 }
 fn locate_source_function_item<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SourceFunctionLocator, fn_decl: decl.FnDecl, rest: decl.FnList) -> (result: SourceFunctionLocator) {
-    let identity: decl.SemanticIdentity = decl.canonical_function_identity<P, N>(pages, stride, total, st.header.module_start, st.header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end);
-    let same: bool = decl.semantic_identity_equal(identity, st.wanted);
+    let same: bool = decl.function_identity_matches<P, N>(pages, stride, total, st.header.module_start, st.header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end, st.wanted);
     return SourceFunctionLocator { rest: rest, header: st.header, wanted: st.wanted, index: st.index + 1, found: same, matched_index: st.index, contains_iteration: same && source_statements_contain_iteration(fn_decl.body.body) };
 }
 enum SourceStatementStack { SourceStatementNil, SourceStatementCons { head: decl.StmtList, tail: SourceStatementStack } }
@@ -2402,7 +2466,10 @@ fn verify_function_source_flow<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     return verify_function_with_flow<P, N>(pages, stride, total, function, cfg);
 }
 fn verify_function_with_flow<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, cfg: flow.FunctionFlow) -> (result: bool) {
-    if !(verify_function_base<P, N>(pages, stride, total, function)) || !(cfg.verified) || cfg.block_count == 0 { return false; }
+    return verify_function_with_flow_and_decls<P, N>(pages, stride, total, function, cfg, empty_local_type_decls());
+}
+fn verify_function_with_flow_and_decls<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, cfg: flow.FunctionFlow, decls: LocalTypeDecls) -> (result: bool) {
+    if !(verify_function_base_with_decls<P, N>(pages, stride, total, function, decls)) || !(cfg.verified) || cfg.block_count == 0 { return false; }
     return verify_flow_loop_links<P, N>(pages, stride, total, function, cfg);
 }
 record FlowLoopLinkScan { rest: flow.BlockList, function: Function, flow_block_count: u64, claimed: IdList, seen: u64, ok: bool }
@@ -2732,8 +2799,8 @@ fn value_kind_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
 fn value_kind_count_step(st: ValueKindCount) -> (result: ValueKindCount) {
     return match st.rest { VNil => st, VCons { head: value, tail: rest } => ValueKindCount { rest: rest, kind: st.kind, count: st.count + select(value.kind == st.kind, 1, 0), limit: st.limit, seen: st.seen + 1 } };
 }
-fn verify_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, blocks: SsaBlockList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: BlockCheck = BlockCheck { rest: blocks, function: function, ok: true, count: 0 } {
+fn verify_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, blocks: SsaBlockList, decls: LocalTypeDecls) -> (result: bool) {
+    iterate i up_to 1024 carrying st: BlockCheck = BlockCheck { rest: blocks, function: function, decls: decls, ok: true, count: 0 } {
         if !(st.ok) { return false; }
         if block_list_empty(st.rest) { return st.count == function.block_count && verify_block_ids<P, N>(pages, stride, total, blocks, function.block_count); }
         if st.count >= function.block_count { return false; }
@@ -2741,15 +2808,15 @@ fn verify_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
     }
     return st.ok && block_list_empty(st.rest) && st.count == function.block_count && verify_block_ids<P, N>(pages, stride, total, blocks, function.block_count);
 }
-record BlockCheck { rest: SsaBlockList, function: Function, ok: bool, count: u64 }
+record BlockCheck { rest: SsaBlockList, function: Function, decls: LocalTypeDecls, ok: bool, count: u64 }
 fn block_list_empty(blocks: SsaBlockList) -> (result: bool) { return match blocks { LNil => true, LCons { head: h, tail: t } => false }; }
 fn verify_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockCheck) -> (result: BlockCheck) {
     if !(st.ok) { return st; }
-    return match st.rest { LNil => st, LCons { head: block, tail: rest } => BlockCheck { rest: rest, function: st.function, ok: verify_one_block<P, N>(pages, stride, total, st.function, block), count: st.count + 1 } };
+    return match st.rest { LNil => st, LCons { head: block, tail: rest } => BlockCheck { rest: rest, function: st.function, decls: st.decls, ok: verify_one_block<P, N>(pages, stride, total, st.function, block, st.decls), count: st.count + 1 } };
 }
-fn verify_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock) -> (result: bool) {
+fn verify_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, decls: LocalTypeDecls) -> (result: bool) {
     let params_ok: bool = verify_parameters<P, N>(pages, stride, total, function, block.id, block.parameters);
-    let instructions_ok: bool = verify_instructions<P, N>(pages, stride, total, function, block, block.instructions);
+    let instructions_ok: bool = verify_instructions<P, N>(pages, stride, total, function, block, block.instructions, decls);
     let term_ok: bool = verify_terminator<P, N>(pages, stride, total, function, block, block.terminator, block.instructions);
     return block.lowering_ok && params_ok && instructions_ok && term_ok && verify_failure_target(function, block);
 }
@@ -2817,8 +2884,8 @@ fn parameter_is_defined<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     return ParameterCheck { rest: rest, function: st.function, block: st.block, index: next_index, ok: value.kind == 1 && value.owner_block == st.block && value.index == st.index && same };
 }
 
-fn verify_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, instructions: InstructionList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: InstructionCheck = InstructionCheck { rest: instructions, function: function, block: block.id, ok: true, sequence: 0 } {
+fn verify_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, instructions: InstructionList, decls: LocalTypeDecls) -> (result: bool) {
+    iterate i up_to 1024 carrying st: InstructionCheck = InstructionCheck { rest: instructions, function: function, decls: decls, block: block.id, ok: true, sequence: 0 } {
         if !(st.ok) { return false; }
         if instruction_list_empty(st.rest) { return true; }
         if i >= function.value_count { return false; }
@@ -2826,11 +2893,11 @@ fn verify_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     }
     return st.ok && instruction_list_empty(st.rest);
 }
-record InstructionCheck { rest: InstructionList, function: Function, block: u64, ok: bool, sequence: u64 }
+record InstructionCheck { rest: InstructionList, function: Function, decls: LocalTypeDecls, block: u64, ok: bool, sequence: u64 }
 fn instruction_list_empty(instructions: InstructionList) -> (result: bool) { return match instructions { QNil => true, QCons { head: h, tail: t } => false }; }
 fn verify_instruction_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: InstructionCheck) -> (result: InstructionCheck) {
     if !(st.ok) { return st; }
-    return match st.rest { QNil => st, QCons { head: inst, tail: rest } => InstructionCheck { rest: rest, function: st.function, block: st.block, ok: verify_instruction<P, N>(pages, stride, total, st.function, st.block, inst, st.sequence), sequence: st.sequence + 1 } };
+    return match st.rest { QNil => st, QCons { head: inst, tail: rest } => InstructionCheck { rest: rest, function: st.function, decls: st.decls, block: st.block, ok: verify_instruction<P, N>(pages, stride, total, st.function, st.block, inst, st.sequence, st.decls), sequence: st.sequence + 1 } };
 }
 record DefinitionCountScan { rest: SsaBlockList, parameters: u64, instructions: u64, value_limit: u64 }
 fn verify_definition_counts<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
@@ -2850,7 +2917,7 @@ fn definition_count_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stri
         LCons { head: block, tail: rest } => DefinitionCountScan { rest: rest, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters, st.value_limit), instructions: st.instructions + instruction_count<P, N>(pages, stride, total, block.instructions, st.value_limit), value_limit: st.value_limit }
     };
 }
-fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: u64, inst: Instruction, sequence: u64) -> (result: bool) {
+fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: u64, inst: Instruction, sequence: u64, decls: LocalTypeDecls) -> (result: bool) {
     if inst.sequence != sequence || !(available_values<P, N>(pages, stride, total, function.values, inst.inputs, block, sequence)) { return false; }
     let result_value: LookupValue = find_value<P, N>(pages, stride, total, function.values, inst.result);
     if !(result_value.found) || result_value.value.kind != 2 || result_value.value.owner_block != block || result_value.value.index != sequence || !(decl.sem_eq<P, N>(pages, stride, total, result_value.value.ty, inst.ty)) { return false; }
@@ -2860,9 +2927,9 @@ fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     if inst.kind == 3 { return verify_call_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 4 { return verify_not_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 5 { return verify_enum_construct_instruction<P, N>(pages, stride, total, function, inst); }
-    if inst.kind == 6 { return verify_match_payload_instruction<P, N>(pages, stride, total, function, inst); }
+    if inst.kind == 6 { return verify_match_payload_instruction<P, N>(pages, stride, total, function, inst, decls); }
     if inst.kind == 7 { return verify_repeat_instruction<P, N>(pages, stride, total, function, inst); }
-    if inst.kind == 8 { return verify_project_instruction<P, N>(pages, stride, total, function, inst); }
+    if inst.kind == 8 { return verify_project_instruction<P, N>(pages, stride, total, function, inst, decls); }
     if inst.kind == 9 { return verify_op_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 10 { return verify_sequence_length_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 11 { return verify_sequence_index_instruction<P, N>(pages, stride, total, function, inst); }
@@ -3036,10 +3103,10 @@ fn repeat_count_literal_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
     let parsed: decl.IntVal = decl.int_value<P, N>(pages, stride, total, start, end);
     return kind == 5 && !(parsed.overflow) && parsed.value == expected;
 }
-fn verify_project_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
+fn verify_project_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, decls: LocalTypeDecls) -> (result: bool) {
     return match inst.inputs {
         IdList.INil => false,
-        IdList.ICons { head: base, tail: rest } => verify_project_base<P, N>(pages, stride, total, function, inst, base, rest)
+        IdList.ICons { head: base, tail: rest } => verify_project_base<P, N>(pages, stride, total, function, inst, base, rest, decls)
     };
 }
 fn verify_sequence_length_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
@@ -3112,16 +3179,16 @@ fn verify_scalar_cast_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     let source_ok: bool = inst.binding_start == inst.start && inst.binding_end == inst.end && decl.op_source_valid<P, N>(pages, stride, total, 7, inst.ty, inst.binding_start, inst.binding_end, 1, inst.start, inst.end);
     return id_list_empty(rest) && inst.kind == 12 && inst.operator == 7 && inst.argc == 1 && found.found && decl.cast_source_ok(found.value.ty) && decl.cast_target_ok(inst.ty) && supported_value_type<P, N>(pages, stride, total, found.value.ty, function.nominals) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals) && inst.identity.valid && decl.semantic_identity_equal(expected, inst.identity) && source_ok && decl.bind_list_empty(inst.params) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities);
 }
-fn verify_project_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, base: Id, rest: IdList) -> (result: bool) {
+fn verify_project_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, base: Id, rest: IdList, decls: LocalTypeDecls) -> (result: bool) {
     let found: LookupValue = find_value<P, N>(pages, stride, total, function.values, base.value);
     let expected_nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, function.nominals, found.value.ty);
     let source_ok: bool = project_source_valid<P, N>(pages, stride, total, inst.start, inst.end, inst.binding_start, inst.binding_end);
-    let declared_ok: bool = project_declared_field<P, N>(pages, stride, total, function, found.value.ty, inst.binding_start, inst.binding_end, inst.operator, inst.ty);
+    let declared_ok: bool = project_declared_field<P, N>(pages, stride, total, function, found.value.ty, inst.binding_start, inst.binding_end, inst.operator, inst.ty, decls);
     return id_list_empty(rest) && inst.argc == 1 && found.found && is_named_type(found.value.ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, inst.nominal_identity) && declared_ok && inst.binding_end > inst.binding_start && inst.variant_start == 0 && inst.variant_end == 0 && source_ok && !(inst.identity.valid) && decl.bind_list_empty(inst.params) && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals);
 }
-fn project_declared_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, base_ty: decl.SemType, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType) -> (result: bool) {
+fn project_declared_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, base_ty: decl.SemType, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType, decls: LocalTypeDecls) -> (result: bool) {
     return match base_ty {
-        TNamed { start: type_start, end: type_end } => project_declared_named_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty),
+        TNamed { start: type_start, end: type_end } => project_declared_named_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty, decls),
         TBool => false,
         TByte => false,
         TInt { width: width, signed: signed } => false,
@@ -3130,19 +3197,25 @@ fn project_declared_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
         TPoison => false
     };
 }
-fn project_declared_named_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, type_start: u64, type_end: u64, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType) -> (result: bool) {
+fn project_declared_named_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, type_start: u64, type_end: u64, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType, decls: LocalTypeDecls) -> (result: bool) {
     if decl.generic_type_marker_index(type_start, type_end) > 1024 {
         return project_declared_imported_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty);
     }
-    let unit: decl.Unit = decl.parse_unit<P, N>(pages, stride, total);
+    if decls.valid {
+        return project_declared_local_record_field<P, N>(pages, stride, total, function, decls.records, decls.enums, type_start, type_end, fstart, fend, field_index, output_ty);
+    }
+    let unit: decl.Unit = decl.parse_unit_signatures<P, N>(pages, stride, total);
     if !(unit.ok) { return false; }
-    let found_record: decl.RecFind = decl.rec_lookup<P, N>(pages, stride, total, unit.records, type_start, type_end);
+    return project_declared_local_record_field<P, N>(pages, stride, total, function, unit.records, unit.enums, type_start, type_end, fstart, fend, field_index, output_ty);
+}
+fn project_declared_local_record_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, records: decl.RecordList, enums: decl.EnumList, type_start: u64, type_end: u64, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType) -> (result: bool) {
+    let found_record: decl.RecFind = decl.rec_lookup<P, N>(pages, stride, total, records, type_start, type_end);
     // Declaration proof follows this same source-span rule: resolve a local
     // record first, then fall back to the exact imported nominal schema.
     if !(found_record.found) { return project_declared_imported_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty); }
     let field: decl.FieldScan = decl.field_scan<P, N>(pages, stride, total, found_record.decl.fields, fstart, fend);
     if !(field.found) || field.index != field_index { return false; }
-    let resolved: decl.TyRes = decl.resolve_type<P, N>(pages, stride, total, field.field.type_kind, field.field.type_start, field.field.type_end, unit.records, unit.enums, function.nominals);
+    let resolved: decl.TyRes = decl.resolve_type<P, N>(pages, stride, total, field.field.type_kind, field.field.type_start, field.field.type_end, records, enums, function.nominals);
     return resolved.ok && decl.sem_eq<P, N>(pages, stride, total, resolved.ty, output_ty);
 }
 fn project_declared_imported_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, type_start: u64, type_end: u64, fstart: u64, fend: u64, field_index: u64, output_ty: decl.SemType) -> (result: bool) {
@@ -3202,26 +3275,26 @@ fn sequence_length_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
         OpCall { slot: slot, name_start: os, name_end: oe, args: a, start: s, end: e } => false
     };
 }
-fn verify_match_payload_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
+fn verify_match_payload_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, decls: LocalTypeDecls) -> (result: bool) {
     return match inst.inputs {
         IdList.INil => false,
-        IdList.ICons { head: subject, tail: rest } => verify_match_payload_subject<P, N>(pages, stride, total, function, inst, subject, rest)
+        IdList.ICons { head: subject, tail: rest } => verify_match_payload_subject<P, N>(pages, stride, total, function, inst, subject, rest, decls)
     };
 }
-fn verify_match_payload_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, subject: Id, rest: IdList) -> (result: bool) {
+fn verify_match_payload_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction, subject: Id, rest: IdList, decls: LocalTypeDecls) -> (result: bool) {
     let found: LookupValue = find_value<P, N>(pages, stride, total, function.values, subject.value);
     let expected_nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, function.nominals, found.value.ty);
     let source_ok: bool = payload_extract_source_valid<P, N>(pages, stride, total, inst.start, inst.end, inst.variant_start, inst.variant_end, inst.binding_start, inst.binding_end, inst.params);
-    let declared_type_ok: bool = payload_declared_field_type<P, N>(pages, stride, total, function, found.value.ty, inst.variant_start, inst.variant_end, inst.params, inst.ty);
+    let declared_type_ok: bool = payload_declared_field_type<P, N>(pages, stride, total, function, found.value.ty, inst.variant_start, inst.variant_end, inst.params, inst.ty, decls);
     let field_type_ok: bool = match inst.params {
         decl.BindList.BNil => false,
         decl.BindList.BCons { head: field, tail: fields } => decl.bind_list_empty(fields) && decl.sem_eq<P, N>(pages, stride, total, field.ty, inst.ty)
     };
     return id_list_empty(rest) && inst.argc == 1 && inst.operator == 0 && found.found && is_named_type(found.value.ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, inst.nominal_identity) && field_type_ok && declared_type_ok && inst.binding_end > inst.binding_start && !(match_payload_wildcard<P, N>(pages, stride, total, inst.binding_start, inst.binding_end)) && source_ok && !(inst.identity.valid) && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals);
 }
-fn payload_declared_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, subject_ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
+fn payload_declared_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, subject_ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType, decls: LocalTypeDecls) -> (result: bool) {
     return match subject_ty {
-        TNamed { start: type_start, end: type_end } => payload_declared_named_field_type<P, N>(pages, stride, total, function, type_start, type_end, variant_start, variant_end, params, output_ty),
+        TNamed { start: type_start, end: type_end } => payload_declared_named_field_type<P, N>(pages, stride, total, function, type_start, type_end, variant_start, variant_end, params, output_ty, decls),
         TBool => false,
         TByte => false,
         TInt { width: width, signed: signed } => false,
@@ -3230,11 +3303,17 @@ fn payload_declared_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
         TPoison => false
     };
 }
-fn payload_declared_named_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
-    let unit: decl.Unit = decl.parse_unit<P, N>(pages, stride, total);
-    let enum_find: decl.EnumFind = decl.enum_lookup<P, N>(pages, stride, total, unit.enums, type_start, type_end);
+fn payload_declared_named_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType, decls: LocalTypeDecls) -> (result: bool) {
+    if decls.valid {
+        return payload_declared_named_field_with_decls<P, N>(pages, stride, total, function, decls.records, decls.enums, type_start, type_end, variant_start, variant_end, params, output_ty);
+    }
+    let unit: decl.Unit = decl.parse_unit_signatures<P, N>(pages, stride, total);
     if !(unit.ok) { return false; }
-    if enum_find.found { return payload_declared_local_enum_field<P, N>(pages, stride, total, function, enum_find.decl, variant_start, variant_end, params, output_ty, unit); }
+    return payload_declared_named_field_with_decls<P, N>(pages, stride, total, function, unit.records, unit.enums, type_start, type_end, variant_start, variant_end, params, output_ty);
+}
+fn payload_declared_named_field_with_decls<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, records: decl.RecordList, enums: decl.EnumList, type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
+    let enum_find: decl.EnumFind = decl.enum_lookup<P, N>(pages, stride, total, enums, type_start, type_end);
+    if enum_find.found { return payload_declared_local_enum_field<P, N>(pages, stride, total, function, enum_find.decl, variant_start, variant_end, params, output_ty, records, enums); }
     let identity: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, function.nominals, decl.SemType.TNamed { start: type_start, end: type_end });
     let schema: decl.ImportedEnumLookup = decl.imported_enum_lookup(function.imported_enums, identity);
     if !(schema.found) { return false; }
@@ -3246,12 +3325,12 @@ fn payload_declared_named_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up
         decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_imported_enum_field<P, N>(pages, stride, total, function.nominals, imported_variant.variant.fields, parameter, rest, output_ty)
     };
 }
-fn payload_declared_local_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, enum_decl: decl.EnumDecl, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType, unit: decl.Unit) -> (result: bool) {
+fn payload_declared_local_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, enum_decl: decl.EnumDecl, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType, records: decl.RecordList, enums: decl.EnumList) -> (result: bool) {
     let variant: decl.VariantScan = decl.variant_scan<P, N>(pages, stride, total, enum_decl.variants, variant_start, variant_end);
     if !(variant.found) { return false; }
     return match params {
         decl.BindList.BNil => false,
-        decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_field_parameter<P, N>(pages, stride, total, function, variant.variant.fields, parameter, rest, output_ty, unit)
+        decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_field_parameter<P, N>(pages, stride, total, function, variant.variant.fields, parameter, rest, output_ty, records, enums)
     };
 }
 fn payload_declared_imported_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, fields: decl.ImportedEnumFieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
@@ -3260,11 +3339,11 @@ fn payload_declared_imported_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N];
     let field: decl.ImportedEnumFieldLookup = decl.imported_enum_field_lookup(fields, key);
     return field.found && field.field.type_valid && imported_enum_field_type_equal<P, N>(pages, stride, total, nominals, field.field.ty, parameter.ty) && imported_enum_field_type_equal<P, N>(pages, stride, total, nominals, field.field.ty, output_ty);
 }
-fn payload_declared_field_parameter<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, fields: decl.FieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType, unit: decl.Unit) -> (result: bool) {
+fn payload_declared_field_parameter<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, fields: decl.FieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType, records: decl.RecordList, enums: decl.EnumList) -> (result: bool) {
     if !(decl.bind_list_empty(rest)) { return false; }
     let field: decl.FieldScan = decl.field_scan<P, N>(pages, stride, total, fields, parameter.start, parameter.end);
     if !(field.found) { return false; }
-    let resolved: decl.TyRes = decl.resolve_type<P, N>(pages, stride, total, field.field.type_kind, field.field.type_start, field.field.type_end, unit.records, unit.enums, function.nominals);
+    let resolved: decl.TyRes = decl.resolve_type<P, N>(pages, stride, total, field.field.type_kind, field.field.type_start, field.field.type_end, records, enums, function.nominals);
     return resolved.ok && decl.sem_eq<P, N>(pages, stride, total, resolved.ty, parameter.ty) && decl.sem_eq<P, N>(pages, stride, total, resolved.ty, output_ty);
 }
 fn payload_extract_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList) -> (result: bool) {
@@ -3293,7 +3372,10 @@ fn payload_extract_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
 }
 record PayloadSourceArmSearch { rest: decl.FiniteMatchArmList, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList, found: bool }
 fn payload_source_arm_found<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, arms: decl.FiniteMatchArmList, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: PayloadSourceArmSearch = PayloadSourceArmSearch { rest: arms, variant_start: variant_start, variant_end: variant_end, binding_start: binding_start, binding_end: binding_end, params: params, found: false } { next st = payload_source_arm_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: PayloadSourceArmSearch = PayloadSourceArmSearch { rest: arms, variant_start: variant_start, variant_end: variant_end, binding_start: binding_start, binding_end: binding_end, params: params, found: false } {
+        if st.found || source_match_arms_empty(st.rest) { return st.found; }
+        next st = payload_source_arm_step<P, N>(pages, stride, total, st);
+    }
     return st.found;
 }
 fn payload_source_arm_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: PayloadSourceArmSearch) -> (result: PayloadSourceArmSearch) {
@@ -3315,7 +3397,10 @@ fn payload_source_binding_found<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
 }
 record PayloadSourceBindingSearch { rest: decl.PayloadBindingList, field_start: u64, field_end: u64, binding_start: u64, binding_end: u64, found: bool }
 fn payload_source_binding_has<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, bindings: decl.PayloadBindingList, field_start: u64, field_end: u64, binding_start: u64, binding_end: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: PayloadSourceBindingSearch = PayloadSourceBindingSearch { rest: bindings, field_start: field_start, field_end: field_end, binding_start: binding_start, binding_end: binding_end, found: false } { next st = payload_source_binding_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: PayloadSourceBindingSearch = PayloadSourceBindingSearch { rest: bindings, field_start: field_start, field_end: field_end, binding_start: binding_start, binding_end: binding_end, found: false } {
+        if st.found || payload_bindings_empty_local(st.rest) { return st.found; }
+        next st = payload_source_binding_step<P, N>(pages, stride, total, st);
+    }
     return st.found;
 }
 fn payload_source_binding_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: PayloadSourceBindingSearch) -> (result: PayloadSourceBindingSearch) {
@@ -3342,7 +3427,10 @@ fn imported_enum_construct_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 record ImportedEnumConstructParamCheck { rest: decl.BindList, fields: decl.ImportedEnumFieldList, seen: decl.NameList, nominals: decl.NominalTypeIdentityList, ok: bool }
 fn imported_enum_construct_fields_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, fields: decl.ImportedEnumFieldList, params: decl.BindList) -> (result: bool) {
     let initial: ImportedEnumConstructParamCheck = ImportedEnumConstructParamCheck { rest: params, fields: fields, seen: decl.NameList.NNil, nominals: nominals, ok: true };
-    iterate i up_to 1024 carrying st: ImportedEnumConstructParamCheck = initial { next st = imported_enum_construct_param_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: ImportedEnumConstructParamCheck = initial {
+        if !(st.ok) || bind_list_empty_local(st.rest) { return st.ok && bind_list_empty_local(st.rest) && decl.imported_payload_shape_ok<P, N>(pages, stride, total, fields, st.seen); }
+        next st = imported_enum_construct_param_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && decl.bind_list_empty(st.rest) && decl.imported_payload_shape_ok<P, N>(pages, stride, total, fields, st.seen);
 }
 fn imported_enum_construct_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedEnumConstructParamCheck) -> (result: ImportedEnumConstructParamCheck) {
@@ -3490,15 +3578,15 @@ fn verify_binary_pair<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     let b: LookupValue = find_value<P, N>(pages, stride, total, values, right.value);
     if !(a.found) || !(b.found) || !(id_list_empty(rest)) || !(decl.sem_eq<P, N>(pages, stride, total, a.value.ty, b.value.ty)) || !(scalar_type(result_type)) || decl.prec(operator) == 0 { return false; }
     let class: u64 = decl.op_class(operator);
-    if class == 2 || class == 3 { return decl.sem_eq<P, N>(pages, stride, total, result_type, decl.SemType.TBool) && binary_operands_match_class<P, N>(pages, stride, total, class, a.value.ty); }
-    return decl.sem_eq<P, N>(pages, stride, total, result_type, a.value.ty) && binary_operands_match_class<P, N>(pages, stride, total, class, a.value.ty);
+    if class == 2 || class == 3 { return decl.sem_eq<P, N>(pages, stride, total, result_type, decl.SemType.TBool) && binary_operands_match_class<P, N>(pages, stride, total, class, operator, a.value.ty); }
+    return decl.sem_eq<P, N>(pages, stride, total, result_type, a.value.ty) && binary_operands_match_class<P, N>(pages, stride, total, class, operator, a.value.ty);
 }
-fn binary_operands_match_class<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, class: u64, ty: decl.SemType) -> (result: bool) {
+fn binary_operands_match_class<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, class: u64, operator: u64, ty: decl.SemType) -> (result: bool) {
     if class == 3 { return decl.sem_eq<P, N>(pages, stride, total, ty, decl.SemType.TBool); }
     return match ty {
         TInt { width: w, signed: s } => class != 3,
         TByte => class != 3,
-        TBool => false,
+        TBool => class == 2 && (operator == 84 || operator == 85),
         TNamed { start: s, end: e } => false,
         TSeq => false,
         TSeqExact { element: element, length: length, length_valid: valid } => false,
@@ -3632,7 +3720,10 @@ fn id_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tota
 fn id_count_step(st: IdCount) -> (result: IdCount) { return match st.rest { INil => st, ICons { head: h, tail: t } => IdCount { rest: t, count: st.count + 1 } }; }
 record AvailableCheck { rest: IdList, values: ValueList, block: u64, before: u64, ok: bool }
 fn available_values<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, ids: IdList, block: u64, before: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: AvailableCheck = AvailableCheck { rest: ids, values: values, block: block, before: before, ok: true } { next st = available_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: AvailableCheck = AvailableCheck { rest: ids, values: values, block: block, before: before, ok: true } {
+        if !(st.ok) || id_list_empty_local(st.rest) { return st.ok && id_list_empty_local(st.rest); }
+        next st = available_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && id_list_empty(st.rest);
 }
 fn available_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: AvailableCheck) -> (result: AvailableCheck) {
@@ -3660,7 +3751,10 @@ fn verify_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 }
 record FiniteCaseCount { rest: FiniteMatchCaseList, count: u64 }
 fn finite_case_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: FiniteMatchCaseList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: FiniteCaseCount = FiniteCaseCount { rest: cases, count: 0 } { next st = finite_case_count_step(st); }
+    iterate i up_to 1024 carrying st: FiniteCaseCount = FiniteCaseCount { rest: cases, count: 0 } {
+        if finite_cases_empty_local(st.rest) { return st.count; }
+        next st = finite_case_count_step(st);
+    }
     return st.count;
 }
 fn finite_case_count_step(st: FiniteCaseCount) -> (result: FiniteCaseCount) {
@@ -3679,7 +3773,10 @@ fn is_named_type(ty: decl.SemType) -> (result: bool) {
 }
 record FiniteSwitchCaseScan { rest: FiniteMatchCaseList, function: Function, source: u64, join: u64, result_ty: decl.SemType, before: u64, ok: bool }
 fn verify_finite_switch_cases<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, source: u64, join: u64, result_ty: decl.SemType, cases: FiniteMatchCaseList, before: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: FiniteSwitchCaseScan = FiniteSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } { next st = verify_finite_switch_case_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: FiniteSwitchCaseScan = FiniteSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } {
+        if !(st.ok) || finite_cases_empty_local(st.rest) { return st.ok && finite_cases_empty_local(st.rest); }
+        next st = verify_finite_switch_case_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && finite_match_cases_empty(st.rest);
 }
 fn finite_match_cases_empty(cases: FiniteMatchCaseList) -> (result: bool) { return match cases { FiniteMatchCaseList.MCNil => true, FiniteMatchCaseList.MCCons { head: h, tail: t } => false }; }
@@ -3696,7 +3793,10 @@ fn verify_finite_switch_case<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 }
 record DuplicateFiniteCaseScan { rest: FiniteMatchCaseList, variant_start: u64, variant_end: u64, target: u64, found: bool }
 fn finite_match_case_duplicate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: FiniteMatchCaseList, candidate: FiniteMatchCase) -> (result: bool) {
-    iterate i up_to 1024 carrying st: DuplicateFiniteCaseScan = DuplicateFiniteCaseScan { rest: cases, variant_start: candidate.variant_start, variant_end: candidate.variant_end, target: candidate.target, found: false } { next st = finite_match_duplicate_step(st); }
+    iterate i up_to 1024 carrying st: DuplicateFiniteCaseScan = DuplicateFiniteCaseScan { rest: cases, variant_start: candidate.variant_start, variant_end: candidate.variant_end, target: candidate.target, found: false } {
+        if st.found || finite_cases_empty_local(st.rest) { return st.found; }
+        next st = finite_match_duplicate_step(st);
+    }
     return st.found;
 }
 fn finite_match_duplicate_step(st: DuplicateFiniteCaseScan) -> (result: DuplicateFiniteCaseScan) {
@@ -3770,7 +3870,10 @@ fn verify_scalar_switch<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
 }
 record ScalarCaseCount { rest: ScalarMatchCaseList, count: u64 }
 fn scalar_case_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: ScalarMatchCaseList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: ScalarCaseCount = ScalarCaseCount { rest: cases, count: 0 } { next st = scalar_case_count_step(st); }
+    iterate i up_to 1024 carrying st: ScalarCaseCount = ScalarCaseCount { rest: cases, count: 0 } {
+        if scalar_cases_empty_local(st.rest) { return st.count; }
+        next st = scalar_case_count_step(st);
+    }
     return st.count;
 }
 fn scalar_case_count_step(st: ScalarCaseCount) -> (result: ScalarCaseCount) {
@@ -3778,7 +3881,10 @@ fn scalar_case_count_step(st: ScalarCaseCount) -> (result: ScalarCaseCount) {
 }
 record ScalarDefaultScan { rest: ScalarMatchCaseList, default_target: u64, count: u64, target_ok: bool }
 fn scalar_switch_default_scan<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: ScalarMatchCaseList, default_target: u64) -> (result: ScalarDefaultScan) {
-    iterate i up_to 1024 carrying st: ScalarDefaultScan = ScalarDefaultScan { rest: cases, default_target: default_target, count: 0, target_ok: true } { next st = scalar_switch_default_step(st); }
+    iterate i up_to 1024 carrying st: ScalarDefaultScan = ScalarDefaultScan { rest: cases, default_target: default_target, count: 0, target_ok: true } {
+        if scalar_cases_empty_local(st.rest) { return st; }
+        next st = scalar_switch_default_step(st);
+    }
     return st;
 }
 fn scalar_switch_default_step(st: ScalarDefaultScan) -> (result: ScalarDefaultScan) {
@@ -3789,7 +3895,10 @@ fn scalar_switch_default_step(st: ScalarDefaultScan) -> (result: ScalarDefaultSc
 }
 record ScalarSwitchCaseScan { rest: ScalarMatchCaseList, function: Function, source: u64, join: u64, result_ty: decl.SemType, before: u64, ok: bool }
 fn verify_scalar_switch_cases<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, source: u64, join: u64, result_ty: decl.SemType, cases: ScalarMatchCaseList, before: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: ScalarSwitchCaseScan = ScalarSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } { next st = verify_scalar_switch_case_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: ScalarSwitchCaseScan = ScalarSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } {
+        if !(st.ok) || scalar_cases_empty_local(st.rest) { return st.ok && scalar_cases_empty_local(st.rest); }
+        next st = verify_scalar_switch_case_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && scalar_match_cases_empty(st.rest);
 }
 fn scalar_match_cases_empty(cases: ScalarMatchCaseList) -> (result: bool) { return match cases { ScalarMatchCaseList.SCNil => true, ScalarMatchCaseList.SCCons { head: h, tail: t } => false }; }
@@ -3807,7 +3916,10 @@ fn verify_scalar_switch_case<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 record DuplicateScalarCaseScan { rest: ScalarMatchCaseList, payload: u64, is_default: bool, target: u64, found: bool }
 fn scalar_match_case_duplicate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cases: ScalarMatchCaseList, candidate: ScalarMatchCase) -> (result: bool) {
     let payload: u64 = select(candidate.negative, decl.negative_payload(candidate.value), candidate.value);
-    iterate i up_to 1024 carrying st: DuplicateScalarCaseScan = DuplicateScalarCaseScan { rest: cases, payload: payload, is_default: candidate.is_default, target: candidate.target, found: false } { next st = scalar_match_duplicate_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: DuplicateScalarCaseScan = DuplicateScalarCaseScan { rest: cases, payload: payload, is_default: candidate.is_default, target: candidate.target, found: false } {
+        if st.found || scalar_cases_empty_local(st.rest) { return st.found; }
+        next st = scalar_match_duplicate_step<P, N>(pages, stride, total, st);
+    }
     return st.found;
 }
 fn scalar_match_duplicate_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: DuplicateScalarCaseScan) -> (result: DuplicateScalarCaseScan) {
@@ -3876,7 +3988,10 @@ fn scalar_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
 }
 record SourceScalarCasePair { arms: decl.ScalarMatchArmList, cases: ScalarMatchCaseList, count: u64, ok: bool }
 fn scalar_match_source_arm_pairs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, arms: decl.ScalarMatchArmList, cases: ScalarMatchCaseList, count: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: SourceScalarCasePair = SourceScalarCasePair { arms: arms, cases: cases, count: 0, ok: true } { next st = scalar_match_source_pair_step(st); }
+    iterate i up_to 1024 carrying st: SourceScalarCasePair = SourceScalarCasePair { arms: arms, cases: cases, count: 0, ok: true } {
+        if !(st.ok) || source_scalar_arms_empty(st.arms) { return st.ok && st.count == count && source_scalar_arms_empty(st.arms) && scalar_match_cases_empty(st.cases); }
+        next st = scalar_match_source_pair_step(st);
+    }
     return st.ok && st.count == count && source_scalar_arms_empty(st.arms) && scalar_match_cases_empty(st.cases);
 }
 fn source_scalar_arms_empty(arms: decl.ScalarMatchArmList) -> (result: bool) { return match arms { MNil => true, MCons { head: h, tail: t } => false }; }
@@ -3919,7 +4034,10 @@ fn finite_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
 }
 record SourceFiniteCasePair { arms: decl.FiniteMatchArmList, cases: FiniteMatchCaseList, count: u64, ok: bool }
 fn finite_match_source_arm_pairs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, arms: decl.FiniteMatchArmList, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: SourceFiniteCasePair = SourceFiniteCasePair { arms: arms, cases: cases, count: 0, ok: true } { next st = finite_match_source_pair_step(st); }
+    iterate i up_to 1024 carrying st: SourceFiniteCasePair = SourceFiniteCasePair { arms: arms, cases: cases, count: 0, ok: true } {
+        if !(st.ok) || source_match_arms_empty(st.arms) { return st.ok && st.count == count && source_match_arms_empty(st.arms) && finite_match_cases_empty(st.cases); }
+        next st = finite_match_source_pair_step(st);
+    }
     return st.ok && st.count == count && source_match_arms_empty(st.arms) && finite_match_cases_empty(st.cases);
 }
 fn source_match_arms_empty(arms: decl.FiniteMatchArmList) -> (result: bool) { return match arms { ANil => true, ACons { head: h, tail: t } => false }; }

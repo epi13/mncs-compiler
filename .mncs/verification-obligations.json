@@ -2799,6 +2799,55 @@
           "invalidation_identity"
         ]
       }
+    },
+    {
+      "identity": "mncs-compiler.vm-emit-seq-repeat-replace-native",
+      "title": "First-class VM lowering for fixed-length Repeat and SequenceReplace preserves exact types/counts and rejects malformed SSA metadata",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_seq_repeat",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_seq_replace"
+      ],
+      "invalidation_dependencies": [
+        "tests/vm_emit_seq_repeat_replace_suite.mncs",
+        "src/compiler/vm_emit.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/decl.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/vm_emit_seq_repeat_replace_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
     }
   ]
 }

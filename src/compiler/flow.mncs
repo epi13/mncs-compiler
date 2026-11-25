@@ -254,7 +254,10 @@ fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
 }
 
 fn walk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: Build) -> (result: Build) {
-    iterate i up_to 1024 carrying d: Build = initial { next d = step<P, N>(pages, stride, total, d); }
+    iterate i up_to 1024 carrying d: Build = initial {
+        if d.done || !(d.ok) { return d; }
+        next d = step<P, N>(pages, stride, total, d);
+    }
     return d;
 }
 fn step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build) -> (result: Build) {
@@ -485,8 +488,17 @@ fn tops_empty(tops: decl.TopsList) -> (result: bool) {
         decl.TopsList.TLCons { head: h, tail: t } => false
     };
 }
+fn typed_expr_list_empty_local(list: TypedExprList) -> (result: bool) {
+    return match list { TypedExprList.ENil => true, TypedExprList.ECons { head: h, tail: t } => false };
+}
+fn diag_list_empty_local(list: DiagnosticList) -> (result: bool) {
+    return match list { DNil => true, DCons { head: h, tail: t } => false };
+}
 fn reverse_typed_expressions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, expressions: TypedExprList) -> (result: TypedExprList) {
-    iterate i up_to 1024 carrying d: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } { next d = reverse_typed_expression_step(d); }
+    iterate i up_to 1024 carrying d: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } {
+        if typed_expr_list_empty_local(d.rest) { return d.acc; }
+        next d = reverse_typed_expression_step(d);
+    }
     return d.acc;
 }
 fn reverse_typed_expression_step(st: TypedExprRev) -> (result: TypedExprRev) {
@@ -501,7 +513,10 @@ fn finish_build(st: Build) -> (result: Build) {
 }
 
 fn reverse_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: BlockList) -> (result: BlockList) {
-    iterate i up_to 1024 carrying d: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } { next d = reverse_block_step(d); }
+    iterate i up_to 1024 carrying d: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } {
+        if block_list_empty(d.rest) { return d.acc; }
+        next d = reverse_block_step(d);
+    }
     return d.acc;
 }
 fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
@@ -511,7 +526,10 @@ fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
     };
 }
 fn block_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList) -> (result: u64) {
-    iterate i up_to 1024 carrying d: BlockCount = BlockCount { rest: blocks, count: 0 } { next d = block_count_step(d); }
+    iterate i up_to 1024 carrying d: BlockCount = BlockCount { rest: blocks, count: 0 } {
+        if block_list_empty(d.rest) { return d.count; }
+        next d = block_count_step(d);
+    }
     return d.count;
 }
 fn block_count_step(st: BlockCount) -> (result: BlockCount) {
@@ -521,7 +539,11 @@ fn block_count_step(st: BlockCount) -> (result: BlockCount) {
     };
 }
 fn verify_targets<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList, limit: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying d: TargetCheck = TargetCheck { rest: blocks, all: blocks, limit: limit, ok: true } { next d = target_step(d); }
+    iterate i up_to 1024 carrying d: TargetCheck = TargetCheck { rest: blocks, all: blocks, limit: limit, ok: true } {
+        if !(d.ok) { return false; }
+        if block_list_empty(d.rest) { return iteration_links_valid<P, N>(pages, stride, total, blocks); }
+        next d = target_step(d);
+    }
     return d.ok && block_list_empty(d.rest) && iteration_links_valid<P, N>(pages, stride, total, blocks);
 }
 fn block_list_empty(list: BlockList) -> (result: bool) {
@@ -541,7 +563,11 @@ fn target_check_block(st: TargetCheck, h: Block, t: BlockList) -> (result: Targe
     return TargetCheck { ..st, rest: t, ok: false };
 }
 fn iteration_links_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: LoopLinkScan = LoopLinkScan { rest: blocks, all: blocks, ok: true } { next st = iteration_link_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: LoopLinkScan = LoopLinkScan { rest: blocks, all: blocks, ok: true } {
+        if !(st.ok) { return false; }
+        if block_list_empty(st.rest) { return true; }
+        next st = iteration_link_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && block_list_empty(st.rest);
 }
 fn iteration_link_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopLinkScan) -> (result: LoopLinkScan) {
@@ -557,7 +583,10 @@ fn iteration_link_check<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     return LoopLinkScan { ..st, rest: rest, ok: block.succ0 == block.iteration_header_id && header };
 }
 fn loop_header_exists<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList, wanted: u64, start: u64, end: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: LoopHeaderScan = LoopHeaderScan { rest: blocks, wanted: wanted, start: start, end: end, found: false } { next st = loop_header_scan_step(st); }
+    iterate i up_to 1024 carrying st: LoopHeaderScan = LoopHeaderScan { rest: blocks, wanted: wanted, start: start, end: end, found: false } {
+        if st.found || block_list_empty(st.rest) { return st.found; }
+        next st = loop_header_scan_step(st);
+    }
     return st.found;
 }
 fn loop_header_scan_step(st: LoopHeaderScan) -> (result: LoopHeaderScan) {
@@ -569,7 +598,10 @@ fn loop_header_scan_step(st: LoopHeaderScan) -> (result: LoopHeaderScan) {
 }
 
 fn diagnostic_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: u64) {
-    iterate i up_to 1024 carrying d: DiagCount = DiagCount { rest: list, count: 0 } { next d = count_diag_step(d); }
+    iterate i up_to 1024 carrying d: DiagCount = DiagCount { rest: list, count: 0 } {
+        if diag_list_empty_local(d.rest) { return d.count; }
+        next d = count_diag_step(d);
+    }
     return d.count;
 }
 fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
@@ -581,11 +613,17 @@ fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
 
 fn append_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
     let rev: DiagnosticList = reverse_diagnostics<P, N>(pages, stride, total, first);
-    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: rev, acc: second } { next d = prepend_diag_step(d); }
+    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: rev, acc: second } {
+        if diag_list_empty_local(d.rest) { return d.acc; }
+        next d = prepend_diag_step(d);
+    }
     return d.acc;
 }
 fn reverse_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: DiagnosticList) {
-    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } { next d = reverse_diag_step(d); }
+    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } {
+        if diag_list_empty_local(d.rest) { return d.acc; }
+        next d = reverse_diag_step(d);
+    }
     return d.acc;
 }
 fn reverse_diag_step(st: DiagRev) -> (result: DiagRev) {

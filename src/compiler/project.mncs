@@ -1441,7 +1441,45 @@ record ResolvedImportLookup { found: bool, signature: decl.Sig }
 record TargetSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record UseSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record ExportSignatureResult { acc: decl.SigTab, resolved: ResolvedImportFactCache }
-record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, local_declarations: decl.FnList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
+record ProviderLocalSigEntry { source_index: u64, name_start: u64, name_end: u64, sig: decl.Sig }
+enum ProviderLocalSigCache { PLSCNil, PLSCCons { head: ProviderLocalSigEntry, tail: ProviderLocalSigCache } }
+record ProviderLocalSigLookup { found: bool, sig: decl.Sig }
+record CallSigResult { tab: decl.SigTab, local_sig_cache: ProviderLocalSigCache }
+record SelectedLocalSigResult { acc: decl.SigTab, local_sig_cache: ProviderLocalSigCache }
+fn provider_local_sig_cache_empty(cache: ProviderLocalSigCache) -> (result: bool) {
+    return match cache { PLSCNil => true, PLSCCons { head: h, tail: t } => false };
+}
+fn provider_local_sig_cache_matches(cache: ProviderLocalSigCache, source_index: u64, name_start: u64, name_end: u64) -> (result: bool) {
+    return match cache {
+        PLSCNil => false,
+        PLSCCons { head: h, tail: t } => h.source_index == source_index && h.name_start == name_start && h.name_end == name_end
+    };
+}
+fn provider_local_sig_cache_head_sig(cache: ProviderLocalSigCache) -> (result: decl.Sig) {
+    return match cache {
+        PLSCNil => decl.Sig { start: 0, end: 0, params: decl.BindList.BNil, nparams: 0, generic_bounds: decl.GenericBoundList.KNil, result: decl.SemType.TPoison, fx: decl.EffectList.XNil, raw_capabilities: decl.CapList.ANil, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, identity: decl.invalid_semantic_identity() },
+        PLSCCons { head: h, tail: t } => h.sig
+    };
+}
+fn provider_local_sig_cache_tail(cache: ProviderLocalSigCache) -> (result: ProviderLocalSigCache) {
+    return match cache { PLSCNil => ProviderLocalSigCache.PLSCNil, PLSCCons { head: h, tail: t } => t };
+}
+fn lookup_cached_local_sig(cache: ProviderLocalSigCache, source_index: u64, name_start: u64, name_end: u64) -> (result: ProviderLocalSigLookup) {
+    let empty_sig: decl.Sig = decl.Sig { start: 0, end: 0, params: decl.BindList.BNil, nparams: 0, generic_bounds: decl.GenericBoundList.KNil, result: decl.SemType.TPoison, fx: decl.EffectList.XNil, raw_capabilities: decl.CapList.ANil, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, identity: decl.invalid_semantic_identity() };
+    iterate chunk up_to 16 carrying outer: ProviderLocalSigCache = cache {
+        iterate i up_to 1024 carrying rest: ProviderLocalSigCache = outer {
+            if provider_local_sig_cache_empty(rest) { return ProviderLocalSigLookup { found: false, sig: empty_sig }; }
+            if provider_local_sig_cache_matches(rest, source_index, name_start, name_end) {
+                return ProviderLocalSigLookup { found: true, sig: provider_local_sig_cache_head_sig(rest) };
+            }
+            next rest = provider_local_sig_cache_tail(rest);
+        }
+        if provider_local_sig_cache_empty(rest) { return ProviderLocalSigLookup { found: false, sig: empty_sig }; }
+        next outer = rest;
+    }
+    return ProviderLocalSigLookup { found: false, sig: empty_sig };
+}
+record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, local_declarations: decl.FnList, local_sig_cache: ProviderLocalSigCache, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, cache_provider_index: u64, member_start: u64, current: ParsedModule, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record ExportSigWalk { rest: decl.SigTab, caller: ParsedModule, target: ParsedModule, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache }
@@ -1460,13 +1498,17 @@ fn resolve_call_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], f
     let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
     let input_stride: u64 = module_stride(sources, current.source_index);
     let input_total: u64 = module_total(sources, current.source_index);
+    let res: CallSigResult = resolve_call_signatures_with_cache<M, N>(sources, flat_pages, input_pages, input_stride, input_total, current, all, nominals, nominal_modules, local_declarations, ProviderLocalSigCache.PLSCNil);
+    return res.tab;
+}
+fn resolve_call_signatures_with_cache<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, local_declarations: decl.FnList, local_sig_cache: ProviderLocalSigCache) -> (result: CallSigResult) {
     let calls: decl.CallSiteList = decl.collect_call_sites<1024, N>(input_pages, input_stride, input_total, current.unit.fns);
-    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules, local_declarations: local_declarations, provider_facts: ProviderSignatureFactsList.PSNil, resolved: ResolvedImportFactCache { facts: ResolvedImportFactList.RIFNil, count: 0 } };
+    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules, local_declarations: local_declarations, local_sig_cache: local_sig_cache, provider_facts: ProviderSignatureFactsList.PSNil, resolved: ResolvedImportFactCache { facts: ResolvedImportFactList.RIFNil, count: 0 } };
     iterate chunk up_to 64 carrying st: CallSigWalk = initial {
-        if decl.call_site_list_empty(st.rest) { return st.acc; }
+        if decl.call_site_list_empty(st.rest) { return CallSigResult { tab: st.acc, local_sig_cache: st.local_sig_cache }; }
         next st = imported_signature_chunk<M, N>(sources, flat_pages, input_pages, input_stride, input_total, current, all, st);
     }
-    return st.acc;
+    return CallSigResult { tab: st.acc, local_sig_cache: st.local_sig_cache };
 }
 fn imported_signature_chunk<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, current: ParsedModule, all: ModuleList, initial: CallSigWalk) -> (result: CallSigWalk) {
     iterate i up_to 1024 carrying st: CallSigWalk = initial {
@@ -1490,8 +1532,8 @@ fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_t
         }
         let local: LocalFnSearchWalk = find_local_fn_same<1024, N>(c_pages, c_stride, c_total, call.start, call.end, st.local_declarations);
         if local.found {
-            let signature: decl.SigTab = selected_local_signature<1024, N>(c_pages, c_stride, c_total, current.unit, st.nominals, local.selected, st.acc);
-            return CallSigWalk { ..st, rest: rest, acc: signature };
+            let signature: SelectedLocalSigResult = selected_local_signature<1024, N>(c_pages, c_stride, c_total, current.source_index, current.unit, st.nominals, local.selected, st.acc, st.local_sig_cache);
+            return CallSigWalk { ..st, rest: rest, acc: signature.acc, local_sig_cache: signature.local_sig_cache };
         }
         if decl.stage0_intrinsic_known<1024, N>(c_pages, c_stride, c_total, call.start, call.end) {
             return CallSigWalk { ..st, rest: rest };
@@ -1503,16 +1545,24 @@ fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_t
     let found: UseSignatureResult = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules, st.provider_facts, st.resolved);
     return CallSigWalk { ..st, rest: rest, acc: found.acc, provider_facts: found.provider_facts, resolved: found.resolved };
 }
-fn selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, selected: decl.FnList, acc: decl.SigTab) -> (result: decl.SigTab) {
+fn selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, source_index: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, selected: decl.FnList, acc: decl.SigTab, local_sig_cache: ProviderLocalSigCache) -> (result: SelectedLocalSigResult) {
     return match selected {
-        DNil => acc,
-        DCons { head: fd, tail: rest } => prepend_selected_local_signature<P, N>(pages, stride, total, unit, nominals, fd, acc)
+        DNil => SelectedLocalSigResult { acc: acc, local_sig_cache: local_sig_cache },
+        DCons { head: fd, tail: rest } => prepend_selected_local_signature<P, N>(pages, stride, total, source_index, unit, nominals, fd, acc, local_sig_cache)
     };
 }
-fn prepend_selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, fd: decl.FnDecl, acc: decl.SigTab) -> (result: decl.SigTab) {
+fn prepend_selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, source_index: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, fd: decl.FnDecl, acc: decl.SigTab, local_sig_cache: ProviderLocalSigCache) -> (result: SelectedLocalSigResult) {
+    let cached: ProviderLocalSigLookup = lookup_cached_local_sig(local_sig_cache, source_index, fd.sig.name_start, fd.sig.name_end);
+    if cached.found {
+        return SelectedLocalSigResult { acc: decl.SigTab.HCons { head: cached.sig, tail: acc }, local_sig_cache: local_sig_cache };
+    }
     let rep: decl.SigRep = decl.check_sig<P, N>(pages, stride, total, fd, unit.records, unit.enums, nominals);
     let owned: decl.Sig = decl.bind_callable_signature<P, N>(pages, stride, total, unit.header.module_start, unit.header.module_end, rep.sig);
-    return decl.SigTab.HCons { head: owned, tail: acc };
+    let next_cache: ProviderLocalSigCache = ProviderLocalSigCache.PLSCCons {
+        head: ProviderLocalSigEntry { source_index: source_index, name_start: fd.sig.name_start, name_end: fd.sig.name_end, sig: owned },
+        tail: local_sig_cache
+    };
+    return SelectedLocalSigResult { acc: decl.SigTab.HCons { head: owned, tail: acc }, local_sig_cache: next_cache };
 }
 fn call_has_dot<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
     if end <= start || end > total { return false; }
@@ -1528,32 +1578,37 @@ fn module_has_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     let walk: LocalFnSearchWalk = find_local_fn_same<P, N>(pages, stride, total, member_start, member_end, fns);
     return walk.found;
 }
-fn find_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, member_start: u64, member_end: u64, fns: decl.FnList) -> (result: LocalFnSearchWalk) {
-    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: fns, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil };
-    iterate chunk up_to 64 carrying st: LocalFnSearchWalk = initial {
-        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
-        next st = module_has_local_fn_same_chunk<P, N>(pages, stride, total, st);
-    }
-    return st;
-}
-fn module_has_local_fn_same_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
-    iterate i up_to 1024 carrying st: LocalFnSearchWalk = initial {
-        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
-        next st = module_has_local_fn_same_step<P, N>(pages, stride, total, st);
-    }
-    return st;
-}
-fn module_has_local_fn_same_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
-    return match st.rest {
-        decl.FnList.DNil => st,
-        decl.FnList.DCons { head: candidate, tail: rest } => module_has_local_fn_same_one<P, N>(pages, stride, total, st, candidate, rest)
+fn local_fn_head_matches_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: decl.FnList, member_start: u64, member_end: u64) -> (result: bool) {
+    return match fns {
+        decl.FnList.DNil => false,
+        decl.FnList.DCons { head: candidate, tail: rest } => decl.spans_equal<P, N>(pages, stride, total, member_start, member_end, candidate.sig.name_start, candidate.sig.name_end)
     };
 }
-fn module_has_local_fn_same_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LocalFnSearchWalk, candidate: decl.FnDecl, rest: decl.FnList) -> (result: LocalFnSearchWalk) {
-    if decl.spans_equal<P, N>(pages, stride, total, st.member_start, st.member_end, candidate.sig.name_start, candidate.sig.name_end) {
-        return LocalFnSearchWalk { ..st, rest: decl.FnList.DNil, found: true, selected: decl.FnList.DCons { head: candidate, tail: decl.FnList.DNil } };
+fn local_fn_head_selected(fns: decl.FnList) -> (result: decl.FnList) {
+    return match fns {
+        decl.FnList.DNil => decl.FnList.DNil,
+        decl.FnList.DCons { head: candidate, tail: rest } => decl.FnList.DCons { head: candidate, tail: decl.FnList.DNil }
+    };
+}
+fn local_fn_tail(fns: decl.FnList) -> (result: decl.FnList) {
+    return match fns {
+        decl.FnList.DNil => decl.FnList.DNil,
+        decl.FnList.DCons { head: candidate, tail: rest } => rest
+    };
+}
+fn find_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, member_start: u64, member_end: u64, fns: decl.FnList) -> (result: LocalFnSearchWalk) {
+    iterate chunk up_to 64 carrying outer: decl.FnList = fns {
+        iterate i up_to 1024 carrying rest: decl.FnList = outer {
+            if decl.declared_fn_list_empty(rest) { return LocalFnSearchWalk { rest: decl.FnList.DNil, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil }; }
+            if local_fn_head_matches_same<P, N>(pages, stride, total, rest, member_start, member_end) {
+                return LocalFnSearchWalk { rest: decl.FnList.DNil, member_start: member_start, member_end: member_end, found: true, selected: local_fn_head_selected(rest) };
+            }
+            next rest = local_fn_tail(rest);
+        }
+        if decl.declared_fn_list_empty(rest) { return LocalFnSearchWalk { rest: decl.FnList.DNil, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil }; }
+        next outer = rest;
     }
-    return LocalFnSearchWalk { ..st, rest: rest };
+    return LocalFnSearchWalk { rest: decl.FnList.DNil, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil };
 }
 fn module_has_local_fn_between<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, member_start: u64, member_end: u64, target: ParsedModule) -> (result: bool) {
     let c_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller_index);
@@ -2924,10 +2979,13 @@ fn lower_one_target_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_t
 }
 
 fn prove_provider_body<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, imported: decl.SigTab, nominals: decl.NominalTypeIdentityList, schemas: TargetSchemaState) -> (result: decl.UnitProve) {
+    return prove_provider_body_with_identity<P, N>(pages, stride, total, unit, imported, nominals, schemas, decl.invalid_semantic_identity());
+}
+fn prove_provider_body_with_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, imported: decl.SigTab, nominals: decl.NominalTypeIdentityList, schemas: TargetSchemaState, known_identity: decl.SemanticIdentity) -> (result: decl.UnitProve) {
     // Provider selection established a single, unambiguous declaration and
     // the resolved nominal identities already include the source's locals.
     let sigs: decl.SigTabRep = decl.collect_sigtab<P, N>(pages, stride, total, unit.fns, unit.records, unit.enums, nominals);
-    let local: decl.SigTab = decl.bind_local_callable_identities<P, N>(pages, stride, total, unit.header, sigs.tab);
+    let local: decl.SigTab = decl.bind_single_local_callable_identity<P, N>(pages, stride, total, unit.header, sigs.tab, known_identity);
     let signatures: decl.SigTab = decl.merge_sig_tables<P, N>(pages, stride, total, local, imported);
     let profile_011: bool = decl.profile_at_least_minor<P, N>(pages, stride, total, unit.header.version_start, unit.header.version_end, 11);
     let profile_013: bool = decl.profile_at_least_013<P, N>(pages, stride, total, unit.header.version_start, unit.header.version_end);
@@ -3364,40 +3422,59 @@ fn compile_project_target_with_context<M: Nat, N: Nat>(snapshot: ProjectSnapshot
 // nominals once per provider so per-callable materialization never re-copies
 // the full project marker list on every reachable function.
 record ProviderNominalPrecombine { rest: NominalModuleList, acc: NominalModuleList }
-fn precombine_provider_nominals<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], dep_nominals: NominalModuleList, markers: decl.NominalTypeIdentityList) -> (result: NominalModuleList) {
+fn precombine_provider_nominals<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, dep_nominals: NominalModuleList, markers: decl.NominalTypeIdentityList) -> (result: NominalModuleList) {
     iterate i up_to 64 carrying st: ProviderNominalPrecombine = ProviderNominalPrecombine { rest: dep_nominals, acc: NominalModuleList.NMNil } {
         if nominal_module_list_empty(st.rest) { return st.acc; }
-        next st = precombine_provider_nominal_step<M, N>(snapshot, flat_pages, markers, st);
+        next st = precombine_provider_nominal_step<M, N>(snapshot, flat_pages, ctx, markers, st);
     }
     return st.acc;
 }
-fn precombine_provider_nominal_step<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], markers: decl.NominalTypeIdentityList, st: ProviderNominalPrecombine) -> (result: ProviderNominalPrecombine) {
+fn precombine_provider_nominal_step<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, markers: decl.NominalTypeIdentityList, st: ProviderNominalPrecombine) -> (result: ProviderNominalPrecombine) {
     return match st.rest {
         NMNil => st,
-        NMCons { head: item, tail: rest } => precombine_provider_nominal_one<M, N>(snapshot, flat_pages, markers, item, rest, st.acc)
+        NMCons { head: item, tail: rest } => precombine_provider_nominal_one<M, N>(snapshot, flat_pages, ctx, markers, item, rest, st.acc)
     };
 }
-fn precombine_provider_nominal_one<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], markers: decl.NominalTypeIdentityList, item: NominalModule, rest: NominalModuleList, acc: NominalModuleList) -> (result: ProviderNominalPrecombine) {
+fn precombine_provider_nominal_one<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, markers: decl.NominalTypeIdentityList, item: NominalModule, rest: NominalModuleList, acc: NominalModuleList) -> (result: ProviderNominalPrecombine) {
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(snapshot.sources, flat_pages, item.source_index);
     let stride: u64 = module_stride(snapshot.sources, item.source_index);
     let total: u64 = module_total(snapshot.sources, item.source_index);
-    let combined: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, stride, total, markers, item.resolved);
+    let selected: TargetModuleSelection = select_target_module(ctx.dependency_modules, item.source_index);
+    let decl_refs: decl.NominalTypeIdentityList = match selected.selected {
+        MNil => decl.NominalTypeIdentityList.NINil,
+        MCons { head: provider, tail: unused } => precombine_provider_decl_refs<M, N>(snapshot, flat_pages, pages, stride, total, ctx, provider, item.local)
+    };
+    let with_markers: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, stride, total, decl_refs, markers);
+    let combined: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, stride, total, item.local, with_markers);
     let cached: NominalModule = NominalModule { source_index: item.source_index, local: item.local, resolved: combined };
     return ProviderNominalPrecombine { rest: rest, acc: NominalModuleList.NMCons { head: cached, tail: acc } };
+}
+fn precombine_provider_decl_refs<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, ctx: SelectedProjectContext, provider: ParsedModule, local: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    let decl_only_unit: decl.Unit = decl.Unit { ..provider.unit, fns: decl.FnList.DNil };
+    let decl_only_provider: ParsedModule = ParsedModule { ..provider, unit: decl_only_unit };
+    return project_nominal_references_only<M, N>(
+        snapshot.sources, flat_pages, pages, stride, total, decl_only_provider,
+        ctx.dependency_modules, ctx.dependency_nominal_modules, local
+    );
 }
 
 // Resolve once for the immutable import closure used by provider bodies.
 fn project_provider_schemas<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext) -> (result: TargetSchemaState) {
     let records: decl.ImportedRecordList = project_record_schemas<M, N>(snapshot.sources, flat_pages, ctx.dependency_modules, ctx.dependency_nominal_modules, ctx.nominal_markers);
     let enums: decl.ImportedEnumList = project_enum_schemas<M, N>(snapshot.sources, flat_pages, ctx.dependency_modules, ctx.dependency_nominal_modules, ctx.nominal_markers);
-    let provider_nominals: NominalModuleList = precombine_provider_nominals<M, N>(snapshot, flat_pages, ctx.dependency_nominal_modules, ctx.nominal_markers);
+    let provider_nominals: NominalModuleList = precombine_provider_nominals<M, N>(snapshot, flat_pages, ctx, ctx.dependency_nominal_modules, ctx.nominal_markers);
     return TargetSchemaState { wanted_markers: ctx.nominal_markers, records: records, enums: enums, provider_nominals: provider_nominals, changed: false };
 }
 // Materialize one reachable body from the already syntax-checked provider.
 // The body stays in its original paged view and the complete signature
 // inventory remains available for calls in that body.
+record MaterializedProviderBuildWithCache { ok: bool, modules: ProjectModuleList, start: u64, end: u64, local_sig_cache: ProviderLocalSigCache }
 fn materialize_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider_source_index: u64, start: u64, end: u64) -> (result: MaterializedProviderBuild) {
-    let refused: MaterializedProviderBuild = MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: 0, end: 0 };
+    let built: MaterializedProviderBuildWithCache = materialize_provider_callable_cached<M, N>(snapshot, flat_pages, ctx, schemas, provider_source_index, start, end, decl.invalid_semantic_identity(), ProviderLocalSigCache.PLSCNil);
+    return MaterializedProviderBuild { ok: built.ok, modules: built.modules, start: built.start, end: built.end };
+}
+fn materialize_provider_callable_cached<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider_source_index: u64, start: u64, end: u64, known_identity: decl.SemanticIdentity, local_sig_cache: ProviderLocalSigCache) -> (result: MaterializedProviderBuildWithCache) {
+    let refused: MaterializedProviderBuildWithCache = MaterializedProviderBuildWithCache { ok: false, modules: ProjectModuleList.PNil, start: 0, end: 0, local_sig_cache: local_sig_cache };
     if !(ctx.result.valid) || provider_source_index >= snapshot.sources.len || provider_source_index >= 64 {
         return refused;
     }
@@ -3407,7 +3484,7 @@ fn materialize_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat
     let selected: TargetModuleSelection = select_target_module(ctx.dependency_modules, provider_source_index);
     return match selected.selected {
         MNil => refused,
-        MCons { head: provider, tail: rest } => build_provider_callable<M, N>(snapshot, flat_pages, ctx, schemas, provider, start, end)
+        MCons { head: provider, tail: rest } => build_provider_callable_cached<M, N>(snapshot, flat_pages, ctx, schemas, provider, start, end, known_identity, local_sig_cache)
     };
 }
 
@@ -3442,18 +3519,18 @@ fn local_call_declarations_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     return LocalCallDeclarations { rest: rest, declarations: next_declarations };
 }
 
-fn build_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider: ParsedModule, start: u64, end: u64) -> (result: MaterializedProviderBuild) {
+fn build_provider_callable_cached<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider: ParsedModule, start: u64, end: u64, known_identity: decl.SemanticIdentity, local_sig_cache: ProviderLocalSigCache) -> (result: MaterializedProviderBuildWithCache) {
     let provider_source_index: u64 = provider.source_index;
     let item: ProjectSource = snapshot.sources[provider_source_index];
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(snapshot.sources, flat_pages, provider_source_index);
     let keyword: decl.Expect = decl.expect<1024, N>(pages, item.stride, item.total, start, 12);
     if !(keyword.ok) {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: keyword.err_start, end: keyword.err_end };
+        return MaterializedProviderBuildWithCache { ok: false, modules: ProjectModuleList.PNil, start: keyword.err_start, end: keyword.err_end, local_sig_cache: local_sig_cache };
     }
     let profile_013: bool = decl.profile_at_least_013<1024, N>(pages, item.stride, item.total, provider.unit.header.version_start, provider.unit.header.version_end);
     let body: decl.FnDecl = decl.parse_fn<1024, N>(pages, item.stride, item.total, keyword.cursor, start, profile_013, true);
     if !(body.ok) || body.fn_end != end {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: body.err_start, end: body.err_end };
+        return MaterializedProviderBuildWithCache { ok: false, modules: ProjectModuleList.PNil, start: body.err_start, end: body.err_end, local_sig_cache: local_sig_cache };
     }
     let unit: decl.Unit = decl.Unit { ..provider.unit, fns: decl.FnList.DCons { head: body, tail: decl.FnList.DNil } };
     let parsed_provider: ParsedModule = ParsedModule {
@@ -3472,16 +3549,16 @@ fn build_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages
         ctx.dependency_modules, ctx.dependency_nominal_modules, existing_nom.facts.local
     );
     let nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, item.stride, item.total, refreshed_refs, existing_nom.facts.resolved);
-    let signatures: decl.SigTab = resolve_call_signatures<M, N>(snapshot.sources, flat_pages, parsed_provider, ctx.dependency_modules, nominals, ctx.dependency_nominal_modules, local_calls);
-    let proof: decl.UnitProve = prove_provider_body<1024, N>(pages, item.stride, item.total, unit, signatures, nominals, schemas);
+    let sig_res: CallSigResult = resolve_call_signatures_with_cache<M, N>(snapshot.sources, flat_pages, pages, item.stride, item.total, parsed_provider, ctx.dependency_modules, nominals, ctx.dependency_nominal_modules, local_calls, local_sig_cache);
+    let proof: decl.UnitProve = prove_provider_body_with_identity<1024, N>(pages, item.stride, item.total, unit, sig_res.tab, nominals, schemas, known_identity);
     let lowered: flow.LoweredUnit = flow.lower_proven_unit<1024, N>(pages, item.stride, item.total, proof);
-    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa_with_imported_schemas<1024, N>(pages, item.stride, item.total, lowered, nominals, schemas.records, schemas.enums);
+    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa_with_known_identity<1024, N>(pages, item.stride, item.total, lowered, nominals, schemas.records, schemas.enums, known_identity);
     if !(lowered.valid) || !(value_ssa.valid) {
         let failed: StageFailure = lower_stage_failure(StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 }, provider_source_index, proof, lowered);
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: failed.start, end: failed.end };
+        return MaterializedProviderBuildWithCache { ok: false, modules: ProjectModuleList.PNil, start: failed.start, end: failed.end, local_sig_cache: sig_res.local_sig_cache };
     }
     let built_module: ProjectModule = ProjectModule { source_id: provider.source_id, source_path: provider.source_path, source_index: provider_source_index, flow: lowered, value_ssa: value_ssa };
-    return MaterializedProviderBuild { ok: true, modules: ProjectModuleList.PCons { head: built_module, tail: ProjectModuleList.PNil }, start: 0, end: 0 };
+    return MaterializedProviderBuildWithCache { ok: true, modules: ProjectModuleList.PCons { head: built_module, tail: ProjectModuleList.PNil }, start: 0, end: 0, local_sig_cache: sig_res.local_sig_cache };
 }
 
 // Compile one ordered snapshot source through proof, CFG, and verified SSA
