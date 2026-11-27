@@ -294,7 +294,7 @@ test finite_schema_transitive_retention_and_failure_detail_facts() -> (result: T
         block_count: 0, instruction_count: 0
     };
     let retained: vm_emit.SchemaUsageState = vm_emit.retain_referenced_schemas(
-        vm_emit.VmSchemas { records: all_recs, finites: all_fins },
+        vm_emit.build_vm_schemas_from_lists(all_recs, all_fins),
         vm_emit.VmFunctionList.VFCons { head: fn_item, tail: vm_emit.VmFunctionList.VFNil }
     );
 

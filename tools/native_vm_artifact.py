@@ -83,21 +83,43 @@ def _semantic_id_str(ident):
     return bytes(ident["bytes"][:ident["len"]]).decode("utf-8")
 
 
-def _identity_ref_str(ref, by_index=None):
+def _decode_long_identity_map(vm_emit_result):
+    mapping = {}
+    for entry in flist(vm_emit_result.get("long_identities")):
+        key = _semantic_id_str(entry["key"])
+        buf = bytearray()
+        for chunk in flist(entry["chunks"]):
+            clen = int(chunk["len"])
+            buf.extend(int(b) for b in chunk["bytes"][:clen])
+        assert len(buf) == int(entry["full_len"]), (
+            f"long identity byte length mismatch for {key}: {len(buf)} != {entry['full_len']}"
+        )
+        mapping[key] = bytes(buf).decode("utf-8")
+    return mapping
+
+
+def _resolve_semantic_id_str(ident, long_identities=None):
+    raw = _semantic_id_str(ident)
+    if long_identities and raw in long_identities:
+        return long_identities[raw]
+    return raw
+
+
+def _identity_ref_str(ref, by_index=None, long_identities=None):
     if isinstance(ref, dict) and "$v" in ref:
         disc = ref["$v"]
         p = ref.get("$p") or {}
         if disc in (0, "VINone"):
             raise ValueError(f"unexpected VINone identity reference: {ref}")
         if disc in (1, "VISome"):
-            return _semantic_id_str(p["value"])
+            return _resolve_semantic_id_str(p["value"], long_identities)
         if disc in (2, "VIIndex"):
             idx = int(p["index"])
             if by_index is None or idx not in by_index:
                 raise ValueError(f"unresolved VIIndex({idx}) in schema table")
             return by_index[idx]
         raise ValueError(f"unsupported VmIdentityRef discriminant: {disc}")
-    return _semantic_id_str(ref)
+    return _resolve_semantic_id_str(ref, long_identities)
 
 
 def _bound_dict(bound_kind, bound_val, ctx):
@@ -110,7 +132,7 @@ def _bound_dict(bound_kind, bound_val, ctx):
 
 
 def _seq_bound(vm_ty):
-    assert vm_ty["valid"] and vm_ty["kind"] in (4, 6), f"expected sequence VmType: {vm_ty}"
+    assert vm_ty["valid"] and vm_ty["kind"] in (4, 6, 8, 9), f"expected sequence VmType: {vm_ty}"
     return _bound_dict(vm_ty["bound_kind"], vm_ty["bound_value"], vm_ty)
 
 
@@ -172,6 +194,14 @@ def _body_type(vm_ty, record_names=None, finite_names=None, rec_by_index=None, f
     if kind == 7:
         fin_id = _identity_ref_str(vm_ty["nominal_identity"], fin_by_index)
         return {"finite": {"identity": fin_id, "name": _finite_short_name(fin_id, finite_names)}}
+    if kind == 8:
+        rec_id = _identity_ref_str(vm_ty["nominal_identity"], rec_by_index)
+        elem = {"record": {"identity": rec_id, "name": _record_short_name(rec_id, record_names)}}
+        return {"sequence": {"element": elem, "bound": _seq_bound(vm_ty)}}
+    if kind == 9:
+        fin_id = _identity_ref_str(vm_ty["nominal_identity"], fin_by_index)
+        elem = {"finite": {"identity": fin_id, "name": _finite_short_name(fin_id, finite_names)}}
+        return {"sequence": {"element": elem, "bound": _seq_bound(vm_ty)}}
     raise ValueError(f"unsupported VmType kind: {kind}")
 
 
@@ -506,12 +536,14 @@ def package_native_vm_artifact(
     root_module_name = source_bytes[mod_start:mod_end].decode("utf-8")
     source_sha256 = _sha256_hex(source_bytes)
 
+    long_id_map = _decode_long_identity_map(vm_emit_result)
+
     raw_record_types = flist(vm_emit_result.get("record_types"))
     raw_rec_ids = [int(item["value"]) for item in flist(vm_emit_result.get("record_type_ids"))]
     record_names = {}
     rec_by_index = {}
     for pos, rec in enumerate(raw_record_types):
-        rec_id = _semantic_id_str(rec["identity"])
+        rec_id = _resolve_semantic_id_str(rec["identity"], long_id_map)
         record_names[rec_id] = _semantic_id_str(rec["name"])
         idx = raw_rec_ids[pos] if pos < len(raw_rec_ids) else (pos + 1)
         rec_by_index[idx] = rec_id
@@ -529,7 +561,7 @@ def package_native_vm_artifact(
     ssa_record_types = []
     seen_rec_ids = set()
     for rec in raw_record_types:
-        rec_id = _semantic_id_str(rec["identity"])
+        rec_id = _resolve_semantic_id_str(rec["identity"], long_id_map)
         if rec_id in seen_rec_ids:
             continue
         seen_rec_ids.add(rec_id)

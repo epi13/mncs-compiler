@@ -1,0 +1,230 @@
+mncs 0.18;
+module tests.compiler_decl_long_record_identity;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Build a single 1024-byte page containing module name, record names, field
+// types (`u64`, `dep.Huge`), a 3-byte field `big`, and 2 distinct 240-byte
+// field names (`f_0...`, `f_1...`) so a 2-field record exceeds 512 bytes (~543B)
+// well within the default 200,000 VM step budget.
+fn fill_repeated_alpha(buf: [byte; 1024], pos: u64, len: u64, val: byte) -> (result: [byte; 1024]) {
+    iterate i up_to 256 carrying cur: [byte; 1024] = buf {
+        if i >= len || pos + i >= 1024 { return cur; }
+        next cur = replace(cur, pos + i, val);
+    }
+    return cur;
+}
+
+fn build_fixture_page() -> (result: [byte; up_to 1024]) {
+    let init: [byte; 1024] = [0 as byte; 1024];
+    // 0..21: "mncs.test.long_rec.v1"
+    let m: [byte; 21] = [
+        109 as byte, 110 as byte, 99 as byte, 115 as byte, 46 as byte,
+        116 as byte, 101 as byte, 115 as byte, 116 as byte, 46 as byte,
+        108 as byte, 111 as byte, 110 as byte, 103 as byte, 95 as byte,
+        114 as byte, 101 as byte, 99 as byte, 46 as byte, 118 as byte, 49 as byte
+    ];
+    iterate i over m carrying b0: [byte; 1024] = init {
+        next b0 = replace(b0, i, m[i]);
+    }
+    // 22..29: "HugeRec" (7 bytes)
+    let huge: [byte; 7] = [72 as byte, 117 as byte, 103 as byte, 101 as byte, 82 as byte, 101 as byte, 99 as byte];
+    iterate i over huge carrying b1: [byte; 1024] = b0 {
+        next b1 = replace(b1, 22 + i, huge[i]);
+    }
+    // 30..38: "SmallRec" (8 bytes)
+    let small: [byte; 8] = [83 as byte, 109 as byte, 97 as byte, 108 as byte, 108 as byte, 82 as byte, 101 as byte, 99 as byte];
+    iterate i over small carrying b2: [byte; 1024] = b1 {
+        next b2 = replace(b2, 30 + i, small[i]);
+    }
+    // 39..48: "ParentRec" (9 bytes)
+    let parent: [byte; 9] = [80 as byte, 97 as byte, 114 as byte, 101 as byte, 110 as byte, 116 as byte, 82 as byte, 101 as byte, 99 as byte];
+    iterate i over parent carrying b3: [byte; 1024] = b2 {
+        next b3 = replace(b3, 39 + i, parent[i]);
+    }
+    // 50..53: "u64" (3 bytes)
+    let u64_ty: [byte; 3] = [117 as byte, 54 as byte, 52 as byte];
+    iterate i over u64_ty carrying b4: [byte; 1024] = b3 {
+        next b4 = replace(b4, 50 + i, u64_ty[i]);
+    }
+    // 54..62: "dep.Huge" (8 bytes)
+    let dep_huge: [byte; 8] = [100 as byte, 101 as byte, 112 as byte, 46 as byte, 72 as byte, 117 as byte, 103 as byte, 101 as byte];
+    iterate i over dep_huge carrying b5: [byte; 1024] = b4 {
+        next b5 = replace(b5, 54 + i, dep_huge[i]);
+    }
+    // 62..65: "big" (3 bytes)
+    let big_fld: [byte; 3] = [98 as byte, 105 as byte, 103 as byte];
+    iterate i over big_fld carrying b6: [byte; 1024] = b5 {
+        next b6 = replace(b6, 62 + i, big_fld[i]);
+    }
+    // 100..580: 2 distinct 240-byte field names: "f_X" + 237 * 'a'
+    iterate idx up_to 2 carrying cur: [byte; 1024] = b6 {
+        let base: u64 = 100 + idx * 240;
+        let c1: [byte; 1024] = replace(cur, base, 102 as byte);
+        let c2: [byte; 1024] = replace(c1, base + 1, 95 as byte);
+        let c3: [byte; 1024] = replace(c2, base + 2, (48 + idx) as byte);
+        next cur = fill_repeated_alpha(c3, base + 3, 237, 97 as byte);
+    }
+    return cur;
+}
+
+fn build_huge_field_list() -> (result: decl.FieldList) {
+    iterate idx up_to 2 carrying acc: decl.FieldList = decl.FieldList.FNil {
+        let base: u64 = 100 + idx * 240;
+        let fld: decl.Field = decl.Field {
+            name_start: base, name_end: base + 240,
+            type_start: 50, type_end: 53,
+            type_kind: 1
+        };
+        next acc = decl.FieldList.FCons { head: fld, tail: acc };
+    }
+    return acc;
+}
+
+fn build_huge_rec() -> (result: decl.RecordDecl) {
+    return decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0,
+        name_start: 22, name_end: 29,
+        fields: build_huge_field_list(),
+        decl_start: 0, decl_end: 0, cursor: 0
+    };
+}
+
+fn count_chunks(chunks: decl.IdentityChunks) -> (result: u64) {
+    iterate i up_to 16 carrying rest: decl.IdentityChunks = chunks {
+        if decl.identity_chunks_empty(rest) { return i; }
+        next rest = match rest {
+            ICNil => decl.IdentityChunks.ICNil,
+            ICCons { head: h, tail: t } => t
+        };
+    }
+    return 16;
+}
+
+fn first_chunk_len(chunks: decl.IdentityChunks) -> (result: u64) {
+    return match chunks {
+        ICNil => 0,
+        ICCons { head: h, tail: t } => h.len
+    };
+}
+
+fn second_chunk_len(chunks: decl.IdentityChunks) -> (result: u64) {
+    return match chunks {
+        ICNil => 0,
+        ICCons { head: h, tail: t } => first_chunk_len(t)
+    };
+}
+
+test canonical_record_identity_preserves_short_and_builds_chunks_past_512() -> (result: TestResult) {
+    let page: [byte; up_to 1024] = build_fixture_page();
+    let pages: [[byte; up_to 1024]; up_to 1] = [page];
+
+    let small_fld: decl.Field = decl.Field {
+        name_start: 62, name_end: 65,
+        type_start: 50, type_end: 53,
+        type_kind: 1
+    };
+    let small_rec: decl.RecordDecl = decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0,
+        name_start: 30, name_end: 38,
+        fields: decl.FieldList.FCons { head: small_fld, tail: decl.FieldList.FNil },
+        decl_start: 0, decl_end: 0, cursor: 0
+    };
+    let small_res: decl.CanonicalRecordIdentity = decl.canonical_record_type_identity_with_long<1, 1024>(
+        pages, 1024, 600, 0, 21, small_rec, decl.NominalTypeIdentityList.NINil, decl.LongIdentityList.LINil
+    );
+    let small_direct: decl.SemanticIdentity = decl.canonical_record_type_identity<1, 1024>(
+        pages, 1024, 600, 0, 21, small_rec, decl.NominalTypeIdentityList.NINil
+    );
+
+    let huge_res: decl.CanonicalRecordIdentity = decl.canonical_record_type_identity_with_long<1, 1024>(
+        pages, 1024, 600, 0, 21, build_huge_rec(), decl.NominalTypeIdentityList.NINil, decl.LongIdentityList.LINil
+    );
+
+    let ok: bool = !(small_res.is_long) && small_res.key.valid && small_res.key.len <= 512
+        && !(decl.is_long_record_ref_key(small_res.key))
+        && decl.semantic_identity_equal(small_res.key, small_direct)
+        && huge_res.is_long && huge_res.key.valid
+        && decl.is_long_record_ref_key(huge_res.key)
+        && huge_res.entry.full_len > 512
+        && count_chunks(huge_res.entry.chunks) == 2
+        && first_chunk_len(huge_res.entry.chunks) == 512
+        && second_chunk_len(huge_res.entry.chunks) == huge_res.entry.full_len - 512;
+    return from_assertion(equals_bool(true, ok, 8801));
+}
+
+test canonical_record_type_identity_returns_surrogate_key_past_512() -> (result: TestResult) {
+    let page: [byte; up_to 1024] = build_fixture_page();
+    let pages: [[byte; up_to 1024]; up_to 1] = [page];
+    let huge_rec: decl.RecordDecl = build_huge_rec();
+
+    let huge_direct: decl.SemanticIdentity = decl.canonical_record_type_identity<1, 1024>(
+        pages, 1024, 600, 0, 21, huge_rec, decl.NominalTypeIdentityList.NINil
+    );
+    let expected_key: decl.SemanticIdentity = decl.canonical_record_ref_key<1, 1024>(
+        pages, 1024, 600, 0, 21, 22, 29
+    );
+
+    let ok: bool = huge_direct.valid
+        && decl.is_long_record_ref_key(huge_direct)
+        && decl.semantic_identity_equal(huge_direct, expected_key);
+    return from_assertion(equals_bool(true, ok, 8803));
+}
+
+test nested_qualified_long_record_field_expands_only_when_resolved_in_longs() -> (result: TestResult) {
+    let page: [byte; up_to 1024] = build_fixture_page();
+    let pages: [[byte; up_to 1024]; up_to 1] = [page];
+
+    let dep_key: decl.SemanticIdentity = decl.canonical_record_ref_key<1, 1024>(
+        pages, 1024, 600, 0, 21, 22, 29
+    );
+    // Construct a 520-byte LongIdentityEntry directly (2 chunks: 512 + 8) so
+    // the full-expansion pass stays well inside the default 200k VM step budget.
+    let c512: [byte; 512] = [97 as byte; 512];
+    let c8: [byte; 512] = [98 as byte; 512];
+    let chunk2: decl.IdentityChunk = decl.IdentityChunk { bytes: c8, len: 8 };
+    let chunk1: decl.IdentityChunk = decl.IdentityChunk { bytes: c512, len: 512 };
+    let dep_entry: decl.LongIdentityEntry = decl.LongIdentityEntry {
+        key: dep_key,
+        full_len: 520,
+        chunks: decl.IdentityChunks.ICCons {
+            head: chunk1,
+            tail: decl.IdentityChunks.ICCons { head: chunk2, tail: decl.IdentityChunks.ICNil }
+        }
+    };
+
+    let parent_field: decl.Field = decl.Field {
+        name_start: 62, name_end: 65,
+        type_start: 54, type_end: 62,
+        type_kind: 6
+    };
+    let parent_rec: decl.RecordDecl = decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0,
+        name_start: 39, name_end: 48,
+        fields: decl.FieldList.FCons { head: parent_field, tail: decl.FieldList.FNil },
+        decl_start: 0, decl_end: 0, cursor: 0
+    };
+    let noms: decl.NominalTypeIdentityList = decl.NominalTypeIdentityList.NICons {
+        head: decl.NominalTypeIdentity { start: 54, end: 62, identity: dep_key, reference: true },
+        tail: decl.NominalTypeIdentityList.NINil
+    };
+
+    let unexpanded: decl.CanonicalRecordIdentity = decl.canonical_record_type_identity_with_long<1, 1024>(
+        pages, 1024, 600, 0, 21, parent_rec, noms, decl.LongIdentityList.LINil
+    );
+    let longs: decl.LongIdentityList = decl.LongIdentityList.LICons {
+        head: dep_entry,
+        tail: decl.LongIdentityList.LINil
+    };
+    let expanded: decl.CanonicalRecordIdentity = decl.canonical_record_type_identity_with_long<1, 1024>(
+        pages, 1024, 600, 0, 21, parent_rec, noms, longs
+    );
+
+    let ok: bool = unexpanded.key.valid && decl.is_long_record_ref_key(unexpanded.key)
+        && !(unexpanded.is_long)
+        && expanded.key.valid && decl.semantic_identity_equal(unexpanded.key, expanded.key)
+        && expanded.is_long && expanded.entry.full_len > 520;
+    return from_assertion(equals_bool(true, ok, 8802));
+}

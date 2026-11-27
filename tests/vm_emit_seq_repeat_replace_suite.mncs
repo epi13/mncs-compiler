@@ -149,3 +149,98 @@ test sequence_replace_lowers_512_byte_update_and_rejects_malformed_metadata() ->
         && !(bad_elem.ok) && bad_elem.error_code == 7;
     return from_assertion(equals_bool(true, passed, 7502));
 }
+
+fn nominal_seq_test_pages() -> (result: [[byte; up_to 256]; up_to 1]) {
+    // "mncs 0.19; module t; record R { x: u64 } enum E { A, B } fn f(r: R, e: E) -> (n: u64) { let xs: [R; 2] = [r; 2]; let ys: [E; 2] = [e; 2]; return xs.len + ys.len; }" (163 bytes)
+    let page: [byte; up_to 256] = [
+        109 as byte, 110 as byte, 99 as byte, 115 as byte, 32 as byte, 48 as byte, 46 as byte, 49 as byte, 57 as byte, 59 as byte,
+        32 as byte, 109 as byte, 111 as byte, 100 as byte, 117 as byte, 108 as byte, 101 as byte, 32 as byte, 116 as byte, 59 as byte,
+        32 as byte, 114 as byte, 101 as byte, 99 as byte, 111 as byte, 114 as byte, 100 as byte, 32 as byte, 82 as byte, 32 as byte,
+        123 as byte, 32 as byte, 120 as byte, 58 as byte, 32 as byte, 117 as byte, 54 as byte, 52 as byte, 32 as byte, 125 as byte,
+        32 as byte, 101 as byte, 110 as byte, 117 as byte, 109 as byte, 32 as byte, 69 as byte, 32 as byte, 123 as byte, 32 as byte,
+        65 as byte, 44 as byte, 32 as byte, 66 as byte, 32 as byte, 125 as byte, 32 as byte, 102 as byte, 110 as byte, 32 as byte,
+        102 as byte, 40 as byte, 114 as byte, 58 as byte, 32 as byte, 82 as byte, 44 as byte, 32 as byte, 101 as byte, 58 as byte,
+        32 as byte, 69 as byte, 41 as byte, 32 as byte, 45 as byte, 62 as byte, 32 as byte, 40 as byte, 110 as byte, 58 as byte,
+        32 as byte, 117 as byte, 54 as byte, 52 as byte, 41 as byte, 32 as byte, 123 as byte, 32 as byte, 108 as byte, 101 as byte,
+        116 as byte, 32 as byte, 120 as byte, 115 as byte, 58 as byte, 32 as byte, 91 as byte, 82 as byte, 59 as byte, 32 as byte,
+        50 as byte, 93 as byte, 32 as byte, 61 as byte, 32 as byte, 91 as byte, 114 as byte, 59 as byte, 32 as byte, 50 as byte,
+        93 as byte, 59 as byte, 32 as byte, 108 as byte, 101 as byte, 116 as byte, 32 as byte, 121 as byte, 115 as byte, 58 as byte,
+        32 as byte, 91 as byte, 69 as byte, 59 as byte, 32 as byte, 50 as byte, 93 as byte, 32 as byte, 61 as byte, 32 as byte,
+        91 as byte, 101 as byte, 59 as byte, 32 as byte, 50 as byte, 93 as byte, 59 as byte, 32 as byte, 114 as byte, 101 as byte,
+        116 as byte, 117 as byte, 114 as byte, 110 as byte, 32 as byte, 120 as byte, 115 as byte, 46 as byte, 108 as byte, 101 as byte,
+        110 as byte, 32 as byte, 43 as byte, 32 as byte, 121 as byte, 115 as byte, 46 as byte, 108 as byte, 101 as byte, 110 as byte,
+        59 as byte, 32 as byte, 125 as byte
+    ];
+    return [page];
+}
+
+test record_and_finite_bounded_sequence_vm_lowering() -> (result: TestResult) {
+    let pages: [[byte; up_to 256]; up_to 1] = nominal_seq_test_pages();
+    let rec_decl: decl.RecordDecl = decl.RecordDecl { ok: true, err_start: 0, err_end: 0, name_start: 28, name_end: 29, fields: decl.FieldList.FNil, decl_start: 21, decl_end: 40, cursor: 40 };
+    let rec_other_decl: decl.RecordDecl = decl.RecordDecl { ok: true, err_start: 0, err_end: 0, name_start: 46, name_end: 47, fields: decl.FieldList.FNil, decl_start: 41, decl_end: 56, cursor: 56 };
+    let rec_id: decl.SemanticIdentity = decl.canonical_record_type_identity<1, 256>(pages, 256, 163, 18, 19, rec_decl, decl.NominalTypeIdentityList.NINil);
+    let rec_other_id: decl.SemanticIdentity = decl.canonical_record_type_identity<1, 256>(pages, 256, 163, 18, 19, rec_other_decl, decl.NominalTypeIdentityList.NINil);
+    let fin_id: decl.SemanticIdentity = decl.canonical_finite_type_identity<1, 256>(pages, 256, 163, 18, 19, 46, 47);
+
+    let rec_elem: vm_emit.VmType = vm_emit.record_vm_type(rec_id);
+    let rec_other_elem: vm_emit.VmType = vm_emit.record_vm_type(rec_other_id);
+    let fin_elem: vm_emit.VmType = vm_emit.finite_vm_type(fin_id);
+    let rec_seq_ty: vm_emit.VmType = vm_emit.exact_seq_vm_type(rec_elem, 4);
+    let fin_seq_ty: vm_emit.VmType = vm_emit.exact_seq_vm_type(fin_elem, 4);
+    let rec_view_ty: vm_emit.VmType = vm_emit.seq_view_up_to_type(rec_seq_ty);
+    let fin_view_ty: vm_emit.VmType = vm_emit.seq_view_up_to_type(fin_seq_ty);
+
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 1, ty: rec_elem },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 2, ty: rec_seq_ty },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 3, ty: fin_elem },
+                tail: vm_emit.VmValueList.VVCons {
+                    head: vm_emit.VmValue { id: 4, ty: fin_seq_ty },
+                    tail: vm_emit.VmValueList.VVCons {
+                        head: vm_emit.VmValue { id: 5, ty: u64_ty() },
+                        tail: vm_emit.VmValueList.VVCons {
+                            head: vm_emit.VmValue { id: 6, ty: rec_other_elem },
+                            tail: vm_emit.VmValueList.VVNil
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    let rep_rec: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(
+        val_types, make_inst(7, 4, 1, ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil }), rec_seq_ty
+    );
+    let rep_fin: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(
+        val_types, make_inst(7, 4, 1, ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil }), fin_seq_ty
+    );
+    let rep_mismatch: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_repeat(
+        val_types, make_inst(7, 4, 1, ssa.IdList.ICons { head: ssa.Id { value: 6 }, tail: ssa.IdList.INil }), rec_seq_ty
+    );
+
+    let rep_r_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 2 },
+        tail: ssa.IdList.ICons { head: ssa.Id { value: 5 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil } }
+    };
+    let rep_f_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: 4 },
+        tail: ssa.IdList.ICons { head: ssa.Id { value: 5 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil } }
+    };
+    let repl_rec: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, rep_r_inputs), rec_seq_ty);
+    let repl_fin: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, rep_f_inputs), fin_seq_ty);
+    let repl_mismatch: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_replace(val_types, make_inst(19, 10, 3, rep_f_inputs), rec_seq_ty);
+
+    let passed: bool = rep_rec.ok && rep_rec.inst.opcode == 19 && rep_rec.inst.ty.kind == 8
+        && vm_emit.vm_type_equal(rep_rec.inst.from_ty, rec_elem)
+        && rep_fin.ok && rep_fin.inst.opcode == 19 && rep_fin.inst.ty.kind == 9
+        && vm_emit.vm_type_equal(rep_fin.inst.from_ty, fin_elem)
+        && !(rep_mismatch.ok) && rep_mismatch.error_code == 7
+        && repl_rec.ok && repl_rec.inst.opcode == 23 && vm_emit.vm_type_equal(repl_rec.inst.ty, rec_seq_ty)
+        && repl_fin.ok && repl_fin.inst.opcode == 23 && vm_emit.vm_type_equal(repl_fin.inst.ty, fin_seq_ty)
+        && !(repl_mismatch.ok) && repl_mismatch.error_code == 7
+        && rec_view_ty.kind == 8 && rec_view_ty.bound_kind == 2 && rec_view_ty.bound_value == 4
+        && fin_view_ty.kind == 9 && fin_view_ty.bound_kind == 2 && fin_view_ty.bound_value == 4;
+    return from_assertion(equals_bool(true, passed, 7503));
+}

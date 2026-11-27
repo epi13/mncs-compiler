@@ -18,6 +18,7 @@ import probe_compiler_module_frontier as frontier
 import test_native_segment_lex_batch_vm_emit as batch
 import test_project as project
 import test_sem as sem
+import test_vm_flow_ssa_frontier as flow_ssa_frontier
 
 ROOT = batch.ROOT
 DECL_MODULE = "mncs.compiler.decl.v1"
@@ -96,6 +97,17 @@ fn call_flow_lower_unit(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: 
 """
 FLOW_LOWER_UNIT_CALLER = "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit"
 
+SSA_LOWER_FLOW_UNIT_CALLER_SRC = """\
+mncs 0.19;
+module mncs.test.ssa_lower_flow_unit_caller.v1;
+use mncs.compiler.ssa.v1 as ssa;
+
+fn call_lower_flow_unit_value_ssa(pages: [[byte; up_to 32]; up_to 4], stride: u64, total: u64) -> (result: ssa.ValueSsaSummary) {
+    return ssa.lower_flow_unit_value_ssa<4, 32>(pages, stride, total);
+}
+"""
+SSA_LOWER_FLOW_UNIT_CALLER = "mncs:0.2:function:mncs.test.ssa_lower_flow_unit_caller.v1::call_lower_flow_unit_value_ssa"
+
 DECLARATION_CASES = {
     "parse_use": (batch.TARGET_PARSE_USE_CALLER, batch.PARSE_USE_CALLER_SRC),
     "parse_unit_signatures": (UNIT_CALLER, UNIT_CALLER_SRC),
@@ -104,6 +116,7 @@ DECLARATION_CASES = {
     "canonical_finite_type_identity": (CANONICAL_FINITE_ID_CALLER, CANONICAL_FINITE_ID_CALLER_SRC),
     "prove_unit": (PROVE_UNIT_CALLER, PROVE_UNIT_CALLER_SRC),
     "flow_lower_unit": (FLOW_LOWER_UNIT_CALLER, FLOW_LOWER_UNIT_CALLER_SRC),
+    "ssa_lower_flow_unit": (SSA_LOWER_FLOW_UNIT_CALLER, SSA_LOWER_FLOW_UNIT_CALLER_SRC),
 }
 
 USE_FIELDS = (
@@ -222,6 +235,41 @@ FLOW_LOWER_UNIT_CASES = (
         32,
     ),
 )
+SSA_FRONTIER_EXPECTATIONS = {
+    name: (shape, expected_iters)
+    for name, _, shape, expected_iters in flow_ssa_frontier.CASES
+}
+SSA_SCALAR_CALL_RAW = b"mncs 0.19;module m;fn inc(x:u64)->(r:u64){return x+1;}fn main(a:u64)->(r:u64){return inc(a+2);}"
+SSA_LOWER_FLOW_UNIT_CASES = (
+    (
+        "fallthrough_join",
+        flow_ssa_frontier.CASES[0][1].encode(),
+        32,
+    ),
+    ("scalar_and_direct_call", SSA_SCALAR_CALL_RAW, 32),
+    ("scalar_and_direct_call_layout_2", SSA_SCALAR_CALL_RAW, 25),
+    (
+        "record_construct_and_project",
+        b"mncs 0.19;module m;record P{x:u64,y:u64}fn f(a:u64)->(r:u64){let p:P=P{x:a,y:a+1};return p.x+p.y;}",
+        32,
+    ),
+    (
+        "finite_enum_match",
+        b"mncs 0.19;module m;enum C{R,B}fn f(c:C)->(r:u64){return match c{R=>1,B=>2};}",
+        32,
+    ),
+    (
+        "conditional_return_counted_iteration",
+        # Compact identifier spelling keeps flow_ssa_frontier.CASES[1] within 4x32 = 128 bytes.
+        b"mncs 0.18;module p;fn f(b:bool)->(r:u64){iterate i up_to 4 carrying s:u64=0{if b{return s;}next s=s+1;}return s;}",
+        32,
+    ),
+    (
+        "semantically_invalid_unit",
+        b"mncs 0.19;module m;fn bad(x:u64)->(r:bool){return x;}",
+        32,
+    ),
+)
 UNIT_CHECK_FIELDS = ("ok", "stage", "err_start", "err_end", "fn_count", "expr_count", "ir_ok")
 
 
@@ -238,12 +286,16 @@ def expected_record_name(case):
         return "UnitProve"
     if case == "flow_lower_unit":
         return "LoweredUnit"
+    if case == "ssa_lower_flow_unit":
+        return "ValueSsaSummary"
     raise ValueError(f"unsupported declaration case {case}")
 
 
 def oracle_module_and_function(case):
     if case == "flow_lower_unit":
         return "mncs.compiler.flow.v1", "lower_unit"
+    if case == "ssa_lower_flow_unit":
+        return "mncs.compiler.ssa.v1", "lower_flow_unit_value_ssa"
     return DECL_MODULE, case
 
 
@@ -265,6 +317,8 @@ def execution_cases(case):
         fixtures = ((label, raw, stride, [], None) for label, raw, stride in PROVE_UNIT_CASES)
     elif case == "flow_lower_unit":
         fixtures = ((label, raw, stride, [], None) for label, raw, stride in FLOW_LOWER_UNIT_CASES)
+    elif case == "ssa_lower_flow_unit":
+        fixtures = ((label, raw, stride, [], None) for label, raw, stride in SSA_LOWER_FLOW_UNIT_CASES)
     else:
         raise ValueError(f"unsupported declaration case {case}")
     for label, raw, stride, extra, expected in fixtures:
@@ -303,10 +357,64 @@ def stage0_results(case):
             elif case == "prove_unit":
                 assert value["unit"]["ok"] is True, (label, value["unit"])
                 assert value["ok"] == (label != "semantically_invalid_unit"), (label, value)
+            elif case == "ssa_lower_flow_unit":
+                loop_resp = oracle.call("value_ssa_loop_instruction_counts", [record])
+                assert loop_resp["status"] == "returned", (label, loop_resp)
+                loop_counts = sem.decode(loop_resp["returned"][0])
+                assert loop_counts["complete"] is True, (label, loop_counts)
+                st_resp = oracle.call("value_ssa_function_status", [record, project.integer(0)])
+                assert st_resp["status"] == "returned", (label, st_resp)
+                fn_status = sem.decode(st_resp["returned"][0])
+                at_resp = oracle.call("value_ssa_function_at", [record, project.integer(0)])
+                assert at_resp["status"] == "returned", (label, at_resp)
+                fn_lookup = sem.decode(at_resp["returned"][0])
+                if label == "semantically_invalid_unit":
+                    assert value["valid"] is False, (label, value)
+                else:
+                    assert value["valid"] is True and value["function_count"] >= 1, (label, value)
+                    assert value["verified_function_count"] == value["function_count"], (label, value)
+                    assert value["supported_function_count"] == value["function_count"], (label, value)
+                    assert fn_status["found"] and fn_status["verified"], (label, fn_status)
+                    assert fn_lookup["found"] and fn_lookup["function"]["verified"], (label, fn_lookup)
+                    if label == "conditional_return_counted_iteration":
+                        assert loop_counts["index_init_count"] == 1, (label, loop_counts)
+                        assert loop_counts["guard_count"] == 1, (label, loop_counts)
+                        assert loop_counts["index_advance_count"] == 1, (label, loop_counts)
+                        assert value["branch_count"] == 2 and value["jump_count"] == 3, (label, value)
+                        assert value["return_count"] == 2 and value["failure_count"] == 1, (label, value)
+                    elif label == "fallthrough_join":
+                        assert loop_counts["index_init_count"] == 0, (label, loop_counts)
+                        assert value["branch_count"] == 1 and value["jump_count"] == 1, (label, value)
+                        assert value["return_count"] == 2 and value["failure_count"] == 1, (label, value)
+                    elif label == "scalar_and_direct_call":
+                        assert value["has_call"] is True and value["call_count"] >= 1, (label, value)
             results[label] = (record["record"]["type_identity"], value)
         return results
     finally:
         oracle.close()
+
+
+def _iter_cons(node):
+    cur = node
+    while isinstance(cur, dict) and cur.get("$v") == 1:
+        payload = cur.get("$p") or {}
+        yield payload["head"]
+        cur = payload.get("tail")
+
+
+def _decoded_ssa_loop_counts(value):
+    counts = {"index_init": 0, "guard": 0, "index_advance": 0}
+    for fn_item in _iter_cons(value.get("functions")):
+        for blk in _iter_cons(fn_item.get("blocks")):
+            for inst in _iter_cons(blk.get("instructions")):
+                kind = inst.get("kind")
+                if kind == 15:
+                    counts["index_init"] += 1
+                elif kind == 13:
+                    counts["guard"] += 1
+                elif kind == 14:
+                    counts["index_advance"] += 1
+    return counts
 
 
 def run_execution(case, target, artifact_path):
@@ -327,15 +435,31 @@ def run_execution(case, target, artifact_path):
             assert returned["record"]["type_identity"] == oracle_identity, (label, returned, oracle_identity)
             value = sem.decode(returned)
             assert value == oracle_value, (label, value, oracle_value)
-            usage = response["record"]["usage"]
-            results[label] = {
+            entry = {
                 "stride": stride,
                 "type_identity": returned["record"]["type_identity"],
                 "returned": value,
                 "matches_stage0": True,
-                "steps": usage["steps"],
-                "max_memory_cells": usage["max_memory_cells"],
+                "steps": response["record"]["usage"]["steps"],
+                "max_memory_cells": response["record"]["usage"]["max_memory_cells"],
             }
+            if case == "ssa_lower_flow_unit" and label in SSA_FRONTIER_EXPECTATIONS:
+                expected_shape, expected_iters = SSA_FRONTIER_EXPECTATIONS[label]
+                assert value["function_count"] == expected_shape["functions"], (label, value, expected_shape)
+                assert value["branch_count"] == expected_shape["branches"], (label, value, expected_shape)
+                assert value["jump_count"] == expected_shape["jumps"], (label, value, expected_shape)
+                assert value["return_count"] == expected_shape["returns"], (label, value, expected_shape)
+                assert value["failure_count"] == expected_shape["failures"], (label, value, expected_shape)
+                assert value["switch_count"] == expected_shape["switches"], (label, value, expected_shape)
+                terminator_total = (
+                    value["branch_count"] + value["jump_count"] + value["return_count"]
+                    + value["failure_count"] + value["switch_count"]
+                )
+                assert terminator_total == value["block_count"], (label, terminator_total, value)
+                loop_counts = _decoded_ssa_loop_counts(value)
+                assert all(c == expected_iters for c in loop_counts.values()), (label, loop_counts, expected_iters)
+                entry["loop_instruction_counts"] = loop_counts
+            results[label] = entry
         if case == "check_unit":
             assert results["valid_local_call"]["returned"] == results["valid_local_call_layout_2"]["returned"], (
                 results["valid_local_call"]["returned"],
@@ -350,6 +474,11 @@ def run_execution(case, target, artifact_path):
             assert results["distinct_module_and_type"]["returned"] == results["page_split_module_and_type"]["returned"], (
                 results["distinct_module_and_type"]["returned"],
                 results["page_split_module_and_type"]["returned"],
+            )
+        elif case == "ssa_lower_flow_unit":
+            assert results["scalar_and_direct_call"]["returned"] == results["scalar_and_direct_call_layout_2"]["returned"], (
+                results["scalar_and_direct_call"]["returned"],
+                results["scalar_and_direct_call_layout_2"]["returned"],
             )
     finally:
         vm.close()
@@ -414,11 +543,17 @@ def select_sources(case):
         ]
     target, wrapper = DECLARATION_CASES[case]
     sources = batch._segment_sources(batch._lexer_sources())
-    extra_mods = ((4, "parser"), (5, "decl"), (6, "flow")) if case == "flow_lower_unit" else ((4, "parser"), (5, "decl"))
+    extra_mods = (
+        ((4, "parser"), (5, "decl"), (6, "flow"), (7, "ssa"))
+        if case == "ssa_lower_flow_unit"
+        else ((4, "parser"), (5, "decl"), (6, "flow"))
+        if case == "flow_lower_unit"
+        else ((4, "parser"), (5, "decl"))
+    )
     for number, name in extra_mods:
         path = ROOT / "src" / "compiler" / f"{name}.mncs"
         sources.append((f"{number:02}_{path.name}", path, path.read_bytes()))
-    wrapper_num = 7 if case == "flow_lower_unit" else 6
+    wrapper_num = 8 if case == "ssa_lower_flow_unit" else 7 if case == "flow_lower_unit" else 6
     wrapper_id = f"{wrapper_num:02}_{case}_caller.mncs"
     sources.append((wrapper_id, Path(wrapper_id), wrapper.encode()))
     sources.sort(key=lambda entry: entry[0].encode())
@@ -442,6 +577,8 @@ def run_request(target, sources, page_bound, step_budget):
     env = {
         "MNCS_LIBRARY_PATH": f"{ROOT / 'src'}:{batch.single_emit.STDLIB_ROOT / 'library'}",
         "MNCS_PROBE_BIN": str(batch.single_emit.PROBE_BIN),
+        "MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT": str(project.probe_toolchain_identity_root(ROOT)),
+        "MNCS_PROBE_COMPACT_RESPONSE": os.environ.get("MNCS_PROBE_COMPACT_RESPONSE", "1"),
         "MNCS_PROBE_MODULES": "source,lexer,parser,segment,decl,flow,ssa,project",
         "MNCS_PROBE_LIBRARY_MODULES": f"{EMITTER},mncs.std.text_utf8.v1",
         "MNCS_PROBE_EXECUTION_MODULES": EMITTER,
@@ -463,12 +600,18 @@ def run_request(target, sources, page_bound, step_budget):
         transport_failed = False
         phase = "stage0_probe_startup"
         try:
+            status_doc = probe.send({"execution_status": True})
+            compact_req = bool(
+                status_doc.get("compact_encoding_supported")
+                and os.environ.get("MNCS_PROBE_COMPACT_REQUEST", "1") == "1"
+            )
             records = {r["name"]: r for r in probe.send({"record_types": EMITTER})}
             encoded = project.encode_project_request_bytes(
                 records, sources, page_bound=page_bound, target_index=len(sources) - 1,
                 target_module=EMITTER, target_function=PRODUCER,
                 extra_arguments=[batch.punct._make_semantic_id_wire(records, target)],
                 step_budget=step_budget,
+                compact_request=compact_req,
             )
             phase = "stage0_probe_request"
             response = probe.send_encoded_decoded(encoded, module=EMITTER, record_digest=False)
@@ -501,6 +644,9 @@ def run_request(target, sources, page_bound, step_budget):
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "request_bytes": observation["request_bytes"],
         "response_bytes": observation["reply_bytes"],
+        "response_encoding": observation.get("response_encoding"),
+        "wait_elapsed_seconds": round(observation["wait_elapsed_ns"] / 1e9, 4) if "wait_elapsed_ns" in observation else None,
+        "response_parse_seconds": round(observation["response_parse_ns"] / 1e9, 4) if "response_parse_ns" in observation else None,
         "reported_execution_steps": observation.get("execution_steps"),
         "child_peak_rss_bytes": (observation.get("final_process") or {}).get("rss_high_water_bytes"),
         "backend": env["MNCS_PROBE_BACKEND"],
@@ -509,7 +655,7 @@ def run_request(target, sources, page_bound, step_budget):
     return response, metrics
 
 
-def run_attempt(case, page_bound, artifact_path, *, step_budget=DEFAULT_STEP_BUDGET):
+def run_attempt(case, page_bound, artifact_path, *, step_budget=DEFAULT_STEP_BUDGET, verify_determinism=False):
     target, sources = select_sources(case)
     selected_bound, pages = frontier._project_page_capacity(sources)
     page_bound = selected_bound if page_bound is None else page_bound
@@ -599,12 +745,37 @@ def run_attempt(case, page_bound, artifact_path, *, step_budget=DEFAULT_STEP_BUD
                     )
                 except (AssertionError, KeyError, OSError, ValueError) as exc:
                     report["execution"] = {"status": "failed", "detail": str(exc)[:4000]}
+            if verify_determinism:
+                resp2, metrics2 = run_request(target, sources, page_bound, step_budget)
+                if resp2 is None or resp2["status"] != "returned" or not resp2["returned"][0]["ok"]:
+                    report["determinism"] = {
+                        "status": "failed",
+                        "emitter_probe_run2": metrics2,
+                        "detail": "second fresh emission failed",
+                    }
+                else:
+                    emitted2 = resp2["returned"][0]
+                    artifact2 = batch._package(emitted2, sources, len(sources) - 1)
+                    artifact2_bytes = json.dumps(artifact2, separators=(",", ":")).encode()
+                    sha2 = hashlib.sha256(artifact2_bytes).hexdigest()
+                    same_raw = emitted == emitted2
+                    same_artifact = artifact_bytes == artifact2_bytes
+                    report["determinism"] = {
+                        "status": "passed" if (same_raw and same_artifact) else "failed",
+                        "deterministic_across_fresh_processes": bool(same_raw and same_artifact),
+                        "raw_emit_equal": same_raw,
+                        "artifact_bytes_equal": same_artifact,
+                        "artifact_sha256_run1": report["emission"]["artifact_sha256"],
+                        "artifact_sha256_run2": sha2,
+                        "emitter_probe_run2": metrics2,
+                    }
+                    assert same_raw and same_artifact, report["determinism"]
     if case != "control":
         diagnosis = compiler_diagnosis.build_diagnosis_document(
             ROOT,
             target_callable=target,
             target_specialization=report["specialization"],
-            declaration_identity=f"mncs:0.2:function:{DECL_MODULE}::{case}",
+            declaration_identity=f"mncs:0.2:function:{oracle_mod}::{oracle_fn}",
             emit_res=emitted,
             request_failure=request_failure,
             source_paths=[path for _, path, _ in sources] + [
@@ -632,6 +803,7 @@ def main():
     parser.add_argument("--step-budget", type=int, default=DEFAULT_STEP_BUDGET)
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--artifact-out", type=Path)
+    parser.add_argument("--verify-determinism", action="store_true")
     args = parser.parse_args()
     if args.step_budget <= 0:
         parser.error("--step-budget must be positive")
@@ -639,7 +811,13 @@ def main():
     guard_host_memory()
     with tempfile.TemporaryDirectory(prefix="mncs-decl-emit-") as scratch:
         artifact_path = args.artifact_out or Path(scratch) / "artifact.json"
-        report = run_attempt(args.case, args.page_bound, artifact_path, step_budget=args.step_budget)
+        report = run_attempt(
+            args.case,
+            args.page_bound,
+            artifact_path,
+            step_budget=args.step_budget,
+            verify_determinism=args.verify_determinism,
+        )
     report["host_peak_rss_bytes"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     rendered = json.dumps(report, indent=2) + "\n"
     if args.json_out:

@@ -59,7 +59,7 @@ fn main() {
         .to_path_buf();
     let mut inputs = BTreeMap::new();
     // Exact compiled adapter and pinned dependency closure. No current self-hosting claim.
-    for name in [
+    let roots = [
         "tools/stage0-probe/src",
         "tools/stage0-probe/build.rs",
         "tools/stage0-probe/Cargo.toml",
@@ -73,8 +73,13 @@ fn main() {
         ".bootstrap/Cargo.lock",
         ".bootstrap/revision",
         ".bootstrap/library/stdlib-bundle.json",
-    ] {
-        collect(&root, &root.join(name), &mut inputs);
+    ];
+    for name in roots {
+        let path = root.join(name);
+        if path.is_dir() {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+        collect(&root, &path, &mut inputs);
     }
     // Cargo must refresh the observation after a commit/worktree HEAD change.
     for arguments in [
@@ -164,7 +169,7 @@ fn main() {
             .output()
             .ok()
             .map(|value| String::from_utf8_lossy(&value.stdout).trim().to_owned());
-    let receipt = serde_json::json!({"schema_version":"mncs.compiler-producer-build/1", "repository":"mncs-compiler", "producer_kind":"stage0-bootstrap-direct-emitter", "source_revision":revision, "dirty_content_identity":hash(&serde_json::to_vec(&dirty_inputs).unwrap()), "dirty_input_count":dirty_inputs.len(), "source_inputs":inputs, "stage0_revision":stage0_revision, "rustc":String::from_utf8_lossy(&compiler.stdout).trim(), "build_configuration":{"profile":std::env::var("PROFILE").ok(),"target":std::env::var("TARGET").ok(),"opt_level":std::env::var("OPT_LEVEL").ok(),"rustflags":std::env::var("RUSTFLAGS").ok(),"cargo_version":cargo_version,"toolchain_executables":{"cargo":cargo_identity,"rustc":rustc_identity}}, "assurance":"local build observation; not independent attestation"});
+    let receipt = serde_json::json!({"schema_version":"mncs.compiler-producer-build/1", "repository":"mncs-compiler", "producer_kind":"stage0-bootstrap-direct-emitter", "source_revision":revision, "dirty_content_identity":hash(&serde_json::to_vec(&dirty_inputs).unwrap()), "dirty_input_count":dirty_inputs.len(), "source_inputs":inputs, "source_input_roots":roots, "stage0_revision":stage0_revision, "rustc":String::from_utf8_lossy(&compiler.stdout).trim(), "build_configuration":{"profile":std::env::var("PROFILE").ok(),"target":std::env::var("TARGET").ok(),"opt_level":std::env::var("OPT_LEVEL").ok(),"rustflags":std::env::var("RUSTFLAGS").ok(),"cargo_version":cargo_version,"toolchain_executables":{"cargo":cargo_identity,"rustc":rustc_identity}}, "assurance":"local build observation; not independent attestation"});
     let bytes = serde_json::to_vec(&receipt).unwrap();
     let value =
         serde_json::json!({"identity":format!("sha256:{}", hash(&bytes)), "receipt":receipt});

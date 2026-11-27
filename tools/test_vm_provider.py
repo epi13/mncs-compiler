@@ -93,6 +93,64 @@ class InspectionTests(unittest.TestCase):
                 (root/'source').write_text('one');(root/'mncs-language.lock.json').write_text(json.dumps({'revision':'repinned'}))
                 self.assertIn('stage0-pin',p.inspect()['mismatches'])
 
+    def test_source_input_roots_preserve_freshness_across_unrelated_commits_and_catch_new_inputs(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / 'src').mkdir()
+            (root / 'src/lib.rs').write_text('pub fn ok() {}')
+            (root / 'mncs-language.lock.json').write_text(json.dumps({'revision': 'pinned'}))
+            exe = root / 'probe'
+            exe.write_text('executable')
+            subprocess.run(['git', 'init', '-q'], cwd=root, check=True)
+            subprocess.run(['git', 'config', 'user.email', 'test@example.invalid'], cwd=root, check=True)
+            subprocess.run(['git', 'config', 'user.name', 'Provider Test'], cwd=root, check=True)
+            subprocess.run(['git', 'add', '.'], cwd=root, check=True)
+            subprocess.run(['git', 'commit', '-qm', 'fixture'], cwd=root, check=True)
+            initial_rev = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
+            receipt = {
+                'source_inputs': {
+                    'src/lib.rs': module.file_digest(root / 'src/lib.rs'),
+                    'mncs-language.lock.json': module.file_digest(root / 'mncs-language.lock.json'),
+                },
+                'source_input_roots': ['src', 'mncs-language.lock.json', 'optional.toml'],
+                'stage0_revision': 'pinned',
+                'build_configuration': {'toolchain_executables': self.toolchain(root)},
+                'source_revision': initial_rev,
+                'dirty_content_identity': module.digest({}),
+                'dirty_input_count': 0,
+            }
+            producer = {'receipt': receipt, 'identity': 'sha256:' + module.digest(receipt)}
+            real_run = module.subprocess.run
+
+            def selected_run(args, **kwargs):
+                if args[0] == 'git':
+                    return real_run(args, **kwargs)
+                return type('R', (), {'stdout': json.dumps(producer)})()
+
+            with patch.object(module.subprocess, 'run', side_effect=selected_run):
+                p = module.CompilerProvider(root, executable=exe)
+                first = p.inspect()
+                self.assertEqual(first['state'], 'ready')
+                (root / 'README.md').write_text('metadata update\n')
+                subprocess.run(['git', 'add', 'README.md'], cwd=root, check=True)
+                subprocess.run(['git', 'commit', '-qm', 'metadata'], cwd=root, check=True)
+                second = p.inspect()
+                self.assertEqual(second['state'], 'ready')
+                self.assertEqual(second['producer']['receipt']['source_revision'], initial_rev)
+                self.assertNotEqual(second['current_source_revision'], initial_rev)
+                (root / 'src/new.rs').write_text('pub fn added() {}')
+                self.assertIn('source-input-set', p.inspect()['mismatches'])
+                (root / 'src/new.rs').unlink()
+                self.assertEqual(p.inspect()['state'], 'ready')
+                (root / 'optional.toml').write_text('[opt]\n')
+                self.assertIn('source-input-set', p.inspect()['mismatches'])
+                (root / 'optional.toml').unlink()
+                receipt_legacy = dict(receipt)
+                receipt_legacy.pop('source_input_roots')
+                producer = {'receipt': receipt_legacy, 'identity': 'sha256:' + module.digest(receipt_legacy)}
+                p_legacy = module.CompilerProvider(root, executable=exe)
+                self.assertIn('source-revision', p_legacy.inspect()['mismatches'])
+
 @unittest.skipUnless((ROOT/'.bootstrap/target/release/mncs-compiler-stage0-probe').is_file(),'build selected producer first')
 class DirectProductTests(unittest.TestCase):
     def test_cache_reuse_tamper_repair_and_source_invalidation(self):

@@ -104,6 +104,40 @@ fn trace_event(mut event: Value) {
     eprintln!("{}", String::from_utf8_lossy(&line));
 }
 
+fn proc_self_memory_telemetry() -> (Option<u64>, Option<u64>) {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return (None, None);
+    };
+    let mut rss_bytes = None;
+    let mut hwm_bytes = None;
+    for line in status.lines() {
+        if let Some(rest) = line.strip_prefix("VmRSS:") {
+            rss_bytes = rest
+                .split_whitespace()
+                .next()
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|kb| kb.saturating_mul(1024));
+        } else if let Some(rest) = line.strip_prefix("VmHWM:") {
+            hwm_bytes = rest
+                .split_whitespace()
+                .next()
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|kb| kb.saturating_mul(1024));
+        }
+        if rss_bytes.is_some() && hwm_bytes.is_some() {
+            break;
+        }
+    }
+    (rss_bytes, hwm_bytes)
+}
+
+fn compact_response_env_enabled() -> bool {
+    matches!(
+        std::env::var("MNCS_PROBE_COMPACT_RESPONSE").as_deref(),
+        Ok("1" | "true")
+    )
+}
+
 fn trace_phase(phase: &str, started: Instant, details: Value) {
     if !telemetry_enabled() {
         return;
@@ -115,6 +149,13 @@ fn trace_phase(phase: &str, started: Instant, details: Value) {
         "duration_ms".to_owned(),
         json!(started.elapsed().as_secs_f64() * 1000.0),
     );
+    let (rss_bytes, hwm_bytes) = proc_self_memory_telemetry();
+    if let Some(rss) = rss_bytes {
+        fields.entry("rss_bytes").or_insert_with(|| json!(rss));
+    }
+    if let Some(hwm) = hwm_bytes {
+        fields.entry("hwm_bytes").or_insert_with(|| json!(hwm));
+    }
     trace_event(Value::Object(fields));
 }
 
@@ -1174,6 +1215,354 @@ impl ProbeReply {
     }
 }
 
+struct CompactExecutionValue<'a>(&'a mncs_model::ExecutionValue);
+
+struct CompactExecutionValueSlice<'a>(&'a [mncs_model::ExecutionValue]);
+
+struct CompactFieldPairs<'a>(&'a [(String, mncs_model::ExecutionValue)]);
+
+impl serde::Serialize for CompactExecutionValueSlice<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for value in self.0 {
+            seq.serialize_element(&CompactExecutionValue(value))?;
+        }
+        seq.end()
+    }
+}
+
+impl serde::Serialize for CompactFieldPairs<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (name, value) in self.0 {
+            map.serialize_entry(name, &CompactExecutionValue(value))?;
+        }
+        map.end()
+    }
+}
+
+impl serde::Serialize for CompactExecutionValue<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use mncs_model::ExecutionValue;
+        use serde::ser::SerializeMap;
+        match self.0 {
+            ExecutionValue::Boolean { value } => serializer.serialize_bool(*value),
+            ExecutionValue::Byte { value } | ExecutionValue::Integer { value, .. } => {
+                serializer.serialize_i128(*value)
+            }
+            ExecutionValue::Sequence { values } => {
+                CompactExecutionValueSlice(values.as_slice()).serialize(serializer)
+            }
+            ExecutionValue::Record { fields, .. } => {
+                CompactFieldPairs(fields.as_slice()).serialize(serializer)
+            }
+            ExecutionValue::Finite {
+                discriminant,
+                payload,
+                ..
+            } => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("$v", discriminant)?;
+                map.serialize_entry("$p", &CompactFieldPairs(payload.as_slice()))?;
+                map.end()
+            }
+            ExecutionValue::Vector { values } => {
+                #[derive(serde::Serialize)]
+                struct VectorInner<'b> {
+                    values: CompactExecutionValueSlice<'b>,
+                }
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry(
+                    "vector",
+                    &VectorInner {
+                        values: CompactExecutionValueSlice(values.as_slice()),
+                    },
+                )?;
+                map.end()
+            }
+            ExecutionValue::Float { .. } | ExecutionValue::Mask { .. } => self.0.serialize(serializer),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct CompactBackendExecutionResult<'a> {
+    schema_version: &'a str,
+    status: &'a mncs_model::ExecutionStatus,
+    target: &'a mncs_model::ExecutionTarget,
+    backend: &'a mncs_model::BackendIdentity,
+    artifact_identity: &'a Option<SemanticId>,
+    artifact_sha256: &'a Option<String>,
+    returned: CompactExecutionValueSlice<'a>,
+    steps: u64,
+    effects: &'a [mncs_model::ExecutionEffectEvent],
+    failure: &'a Option<mncs_model::ExecutionFailure>,
+    value_encoding: &'static str,
+}
+
+#[derive(serde::Serialize)]
+struct CompactExecutionResult<'a> {
+    schema_version: &'a str,
+    status: &'a mncs_model::ExecutionStatus,
+    target: &'a mncs_model::ExecutionTarget,
+    program_identity: &'a Option<SemanticId>,
+    program_fingerprint: &'a Option<String>,
+    function_identity: &'a Option<SemanticId>,
+    returned: CompactExecutionValueSlice<'a>,
+    steps: u64,
+    failure: &'a Option<mncs_model::ExecutionFailure>,
+    trace: &'a [mncs_model::ExecutionTraceEntry],
+    trace_truncated: bool,
+    effects: &'a [mncs_model::ExecutionEffectEvent],
+    value_encoding: &'static str,
+}
+
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+enum CompactProbeReply<'a> {
+    Json(&'a Value),
+    Backend(CompactBackendExecutionResult<'a>),
+    Reference(CompactExecutionResult<'a>),
+}
+
+impl<'a> CompactProbeReply<'a> {
+    fn from_reply(reply: &'a ProbeReply) -> Self {
+        match reply {
+            ProbeReply::Json(value) => Self::Json(value),
+            ProbeReply::Backend(result) => Self::Backend(CompactBackendExecutionResult {
+                schema_version: &result.schema_version,
+                status: &result.status,
+                target: &result.target,
+                backend: &result.backend,
+                artifact_identity: &result.artifact_identity,
+                artifact_sha256: &result.artifact_sha256,
+                returned: CompactExecutionValueSlice(&result.returned),
+                steps: result.steps,
+                effects: &result.effects,
+                failure: &result.failure,
+                value_encoding: "compact",
+            }),
+            ProbeReply::Reference(result) => Self::Reference(CompactExecutionResult {
+                schema_version: &result.schema_version,
+                status: &result.status,
+                target: &result.target,
+                program_identity: &result.program_identity,
+                program_fingerprint: &result.program_fingerprint,
+                function_identity: &result.function_identity,
+                returned: CompactExecutionValueSlice(&result.returned),
+                steps: result.steps,
+                failure: &result.failure,
+                trace: &result.trace,
+                trace_truncated: result.trace_truncated,
+                effects: &result.effects,
+                value_encoding: "compact",
+            }),
+        }
+    }
+}
+
+fn write_probe_reply(output: ProbeReply, compact_response: bool, request_kind: &str) {
+    let write_started = Instant::now();
+    trace_event(json!({
+        "event": "phase_begin",
+        "phase": "response_write",
+        "request_kind": request_kind,
+        "compact_response": compact_response
+    }));
+    let stdout = io::stdout();
+    let mut writer = CountingWriter::new(BufWriter::with_capacity(256 * 1024, stdout.lock()));
+    if compact_response {
+        serde_json::to_writer(&mut writer, &CompactProbeReply::from_reply(&output)).unwrap();
+    } else {
+        serde_json::to_writer(&mut writer, &output).unwrap();
+    }
+    drop(output);
+    writer.write_all(b"\n").unwrap();
+    writer.flush().unwrap();
+    let response_bytes = writer.bytes_written();
+    drop(writer);
+    trace_phase(
+        "response_write",
+        write_started,
+        json!({
+            "request_kind": request_kind,
+            "response_bytes": response_bytes,
+            "compact_response": compact_response
+        }),
+    );
+}
+
+struct DecodedProbeRequest {
+    input: Value,
+    request_bytes: usize,
+    compact_response: bool,
+    request_kind: &'static str,
+    request_module: Option<String>,
+    request_function: Option<String>,
+    request_step_budget: Option<u64>,
+}
+
+fn decode_probe_request(line: String) -> DecodedProbeRequest {
+    let request_bytes = line.len();
+    let parse_started = Instant::now();
+    trace_event(json!({
+        "event": "phase_begin",
+        "phase": "request_json_decode",
+        "request_bytes": request_bytes
+    }));
+    let mut deserializer = serde_json::Deserializer::from_str(&line);
+    deserializer.disable_recursion_limit();
+    let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
+    drop(line);
+    let compact_response = input
+        .get("compact_response")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(compact_response_env_enabled);
+    let request_kind = if input.get("execution_status").is_some() {
+        "execution_status"
+    } else if input.get("record_types").is_some() {
+        "record_types"
+    } else if input.get("project_oracle").is_some() {
+        "project_oracle"
+    } else if input.get("compile_application").is_some() {
+        "compile_application"
+    } else if input.get("emit_vm_artifact").is_some() {
+        "emit_vm_artifact"
+    } else if input.get("elaborate").is_some() {
+        "elaborate"
+    } else if input.get("ssa").is_some() {
+        "ssa_oracle"
+    } else {
+        "mncs_function_execution"
+    };
+    let request_module = input
+        .get("target")
+        .and_then(|target| target.get("module"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let request_function = input
+        .get("target")
+        .and_then(|target| target.get("function"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let request_step_budget = input.get("step_budget").and_then(Value::as_u64);
+    trace_phase(
+        "request_json_decode",
+        parse_started,
+        json!({
+            "request_kind": request_kind,
+            "request_bytes": request_bytes,
+            "target_module": request_module,
+            "target_function": request_function
+        }),
+    );
+    DecodedProbeRequest {
+        input,
+        request_bytes,
+        compact_response,
+        request_kind,
+        request_module,
+        request_function,
+        request_step_budget,
+    }
+}
+
+fn decode_hex_nibble(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        b'A'..=b'F' => byte - b'A' + 10,
+        _ => panic!("invalid hex nibble byte {byte} in sequence_hex"),
+    }
+}
+
+fn decode_hex_byte_sequence(hex: &str) -> mncs_model::ExecutionValue {
+    let raw = hex.as_bytes();
+    assert!(raw.len() % 2 == 0, "sequence_hex length must be even");
+    let mut values = Vec::with_capacity(raw.len() / 2);
+    for pair in raw.chunks_exact(2) {
+        let byte = (decode_hex_nibble(pair[0]) << 4) | decode_hex_nibble(pair[1]);
+        values.push(mncs_model::ExecutionValue::Byte {
+            value: byte as i128,
+        });
+    }
+    mncs_model::ExecutionValue::Sequence {
+        values: std::sync::Arc::new(values),
+    }
+}
+
+fn decode_execution_value(val: Value) -> mncs_model::ExecutionValue {
+    if let Value::Object(mut obj) = val {
+        if obj.len() == 1 {
+            if let Some(Value::String(hex)) = obj.get("sequence_hex") {
+                return decode_hex_byte_sequence(hex);
+            }
+            if obj.contains_key("sequence") {
+                if let Some(Value::Object(mut seq_obj)) = obj.remove("sequence") {
+                    if let Some(Value::Array(items)) = seq_obj.remove("values") {
+                        let decoded = items.into_iter().map(decode_execution_value).collect();
+                        return mncs_model::ExecutionValue::Sequence {
+                            values: std::sync::Arc::new(decoded),
+                        };
+                    }
+                }
+                panic!("malformed sequence ExecutionValue object");
+            }
+            if obj.contains_key("record") {
+                if let Some(Value::Object(mut rec_obj)) = obj.remove("record") {
+                    if let (
+                        Some(Value::String(type_id)),
+                        Some(Value::String(name)),
+                        Some(Value::Array(fields)),
+                    ) = (
+                        rec_obj.remove("type_identity"),
+                        rec_obj.remove("name"),
+                        rec_obj.remove("fields"),
+                    ) {
+                        let decoded_fields = fields
+                            .into_iter()
+                            .map(|pair| match pair {
+                                Value::Array(mut kv) if kv.len() == 2 => {
+                                    let val = kv.pop().unwrap();
+                                    let key = match kv.pop().unwrap() {
+                                        Value::String(k) => k,
+                                        other => panic!("non-string record field key: {other:?}"),
+                                    };
+                                    (key, decode_execution_value(val))
+                                }
+                                other => panic!("malformed record field pair: {other:?}"),
+                            })
+                            .collect();
+                        return mncs_model::ExecutionValue::Record {
+                            type_identity: SemanticId(type_id),
+                            name,
+                            fields: std::sync::Arc::new(decoded_fields),
+                        };
+                    }
+                }
+                panic!("malformed record ExecutionValue object");
+            }
+        }
+        return serde_json::from_value(Value::Object(obj)).unwrap();
+    }
+    serde_json::from_value(val).unwrap()
+}
+
+fn decode_execution_request(mut input: Value) -> ExecutionRequest {
+    let args_val = input
+        .as_object_mut()
+        .and_then(|obj| obj.insert("arguments".to_owned(), Value::Array(Vec::new())))
+        .unwrap_or_else(|| panic!("execution request missing arguments"));
+    let mut request: ExecutionRequest = serde_json::from_value(input).unwrap();
+    let Value::Array(raw_args) = args_val else {
+        panic!("execution request arguments must be an array");
+    };
+    request.arguments = raw_args.into_iter().map(decode_execution_value).collect();
+    request
+}
+
 fn main() {
     if std::env::args().skip(1).eq(["--cache-maintain"]) {
         let directory = std::env::var("MNCS_PROBE_CACHE_DIR").unwrap_or_default();
@@ -2019,44 +2408,15 @@ fn main() {
     if release_programs_after_identities {
         let mut record_types_cache = BTreeMap::<String, Value>::new();
         for line in io::stdin().lock().lines() {
-            let line = line.unwrap();
-            let parse_started = Instant::now();
-            trace_event(json!({
-                "event": "phase_begin",
-                "phase": "request_json_decode",
-                "request_bytes": line.len()
-            }));
-            let mut deserializer = serde_json::Deserializer::from_str(&line);
-            deserializer.disable_recursion_limit();
-            let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
-            let request_kind = if input.get("execution_status").is_some() {
-                "execution_status"
-            } else if input.get("record_types").is_some() {
-                "record_types"
-            } else {
-                "mncs_function_execution"
-            };
-            let request_module = input
-                .get("target")
-                .and_then(|target| target.get("module"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            let request_function = input
-                .get("target")
-                .and_then(|target| target.get("function"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            let request_step_budget = input.get("step_budget").and_then(Value::as_u64);
-            trace_phase(
-                "request_json_decode",
-                parse_started,
-                json!({
-                    "request_kind": request_kind,
-                    "request_bytes": line.len(),
-                    "target_module": request_module,
-                    "target_function": request_function
-                }),
-            );
+            let DecodedProbeRequest {
+                input,
+                request_bytes: _,
+                compact_response,
+                request_kind,
+                request_module,
+                request_function,
+                request_step_budget,
+            } = decode_probe_request(line.unwrap());
             let dispatch_started = Instant::now();
             trace_event(json!({
                 "event": "phase_begin",
@@ -2071,6 +2431,7 @@ fn main() {
                     "backend": backend_name,
                     "modules": backend_sessions.len(),
                     "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
+                    "compact_encoding_supported": true,
                 }))
             } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
                 if let Some(record_types) = record_types_cache.get(module) {
@@ -2098,7 +2459,7 @@ fn main() {
                     ProbeReply::Json(record_types)
                 }
             } else {
-                let request: ExecutionRequest = serde_json::from_value(input).unwrap();
+                let request = decode_execution_request(input);
                 let session = backend_sessions
                     .get(&request.target.module)
                     .unwrap_or_else(|| {
@@ -2135,34 +2496,7 @@ fn main() {
                     "report": mncs_model::cost_report()
                 }));
             }
-            let encode_started = Instant::now();
-            trace_event(json!({
-                "event": "phase_begin",
-                "phase": "response_json_encode",
-                "request_kind": request_kind
-            }));
-            let output_line = serde_json::to_string(&output).unwrap();
-            drop(output);
-            trace_phase(
-                "response_json_encode",
-                encode_started,
-                json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
-            );
-            let write_started = Instant::now();
-            trace_event(json!({
-                "event": "phase_begin",
-                "phase": "response_write",
-                "request_kind": request_kind,
-                "response_bytes": output_line.len()
-            }));
-            let stdout = io::stdout();
-            let mut stdout = stdout.lock();
-            writeln!(stdout, "{output_line}").unwrap();
-            trace_phase(
-                "response_write",
-                write_started,
-                json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
-            );
+            write_probe_reply(output, compact_response, request_kind);
         }
         return;
     }
@@ -2174,54 +2508,15 @@ fn main() {
         // bounded fixture sources on this loop; never expose it to a
         // socket, and reach for serde_stacker before sending large
         // real-module Functions through verify-style requests.
-        let line = line.unwrap();
-        let parse_started = Instant::now();
-        trace_event(json!({
-            "event": "phase_begin",
-            "phase": "request_json_decode",
-            "request_bytes": line.len()
-        }));
-        let mut deserializer = serde_json::Deserializer::from_str(&line);
-        deserializer.disable_recursion_limit();
-        let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
-        let request_kind = if input.get("execution_status").is_some() {
-            "execution_status"
-        } else if input.get("record_types").is_some() {
-            "record_types"
-        } else if input.get("project_oracle").is_some() {
-            "project_oracle"
-        } else if input.get("compile_application").is_some() {
-            "compile_application"
-        } else if input.get("emit_vm_artifact").is_some() {
-            "emit_vm_artifact"
-        } else if input.get("elaborate").is_some() {
-            "elaborate"
-        } else if input.get("ssa").is_some() {
-            "ssa_oracle"
-        } else {
-            "mncs_function_execution"
-        };
-        let request_module = input
-            .get("target")
-            .and_then(|target| target.get("module"))
-            .and_then(Value::as_str)
-            .map(str::to_owned);
-        let request_function = input
-            .get("target")
-            .and_then(|target| target.get("function"))
-            .and_then(Value::as_str)
-            .map(str::to_owned);
-        let request_step_budget = input.get("step_budget").and_then(Value::as_u64);
-        trace_phase(
-            "request_json_decode",
-            parse_started,
-            json!({
-                "request_kind": request_kind,
-                "request_bytes": line.len(),
-                "target_module": request_module,
-                "target_function": request_function
-            }),
-        );
+        let DecodedProbeRequest {
+            input,
+            request_bytes,
+            compact_response,
+            request_kind,
+            request_module,
+            request_function,
+            request_step_budget,
+        } = decode_probe_request(line.unwrap());
         let dispatch_started = Instant::now();
         trace_event(json!({
             "event": "phase_begin",
@@ -2240,6 +2535,7 @@ fn main() {
                 "backend": backend_name,
                 "modules": backend_sessions.len(),
                 "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
+                "compact_encoding_supported": true,
             }))
         } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
             ProbeReply::Json(json!(programs[module].record_types))
@@ -2347,11 +2643,11 @@ fn main() {
             trace_event(json!({
                 "event": "phase_begin",
                 "phase": "execution_request_decode",
-                "request_bytes": line.len(),
+                "request_bytes": request_bytes,
                 "target_module": request_module,
                 "target_function": request_function
             }));
-            let request: ExecutionRequest = serde_json::from_value(input).unwrap();
+            let request = decode_execution_request(input);
             trace_phase(
                 "execution_request_decode",
                 request_decode_started,
@@ -2464,36 +2760,7 @@ fn main() {
                 "report": mncs_model::cost_report()
             }));
         }
-        let encode_started = Instant::now();
-        trace_event(json!({
-            "event": "phase_begin",
-            "phase": "response_json_encode",
-            "request_kind": request_kind
-        }));
-        let output_line = serde_json::to_string(&output).unwrap();
-        drop(output);
-        trace_phase(
-            "response_json_encode",
-            encode_started,
-            json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
-        );
-        let write_started = Instant::now();
-        trace_event(json!({
-            "event": "phase_begin",
-            "phase": "response_write",
-            "request_kind": request_kind,
-            "response_bytes": output_line.len()
-        }));
-        let stdout = io::stdout();
-        let mut stdout = stdout.lock();
-        writeln!(stdout, "{output_line}").unwrap();
-        stdout.flush().unwrap();
-        drop(stdout);
-        trace_phase(
-            "response_write",
-            write_started,
-            json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
-        );
+        write_probe_reply(output, compact_response, request_kind);
     }
 }
 
@@ -3131,5 +3398,162 @@ mod tests {
         assert_eq!(missing.bootstrap_tree_sha256, UNKNOWN_IDENTITY_PART);
         assert_eq!(missing.bootstrap_cargo_lock_sha256, UNKNOWN_IDENTITY_PART);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn compact_probe_reply_matches_tagged_decoded_structure() {
+        use mncs_model::{
+            ExecutionResult, ExecutionStatus, ExecutionTarget, ExecutionValue, IntegerType,
+        };
+        use std::sync::Arc;
+
+        let u64_ty = IntegerType {
+            bits: 64,
+            signed: false,
+        };
+        let complex = ExecutionValue::Record {
+            type_identity: SemanticId("mncs:0.2:record:test::Outer".to_owned()),
+            name: "Outer".to_owned(),
+            fields: Arc::new(vec![
+                (
+                    "flag".to_owned(),
+                    ExecutionValue::Boolean { value: true },
+                ),
+                (
+                    "count".to_owned(),
+                    ExecutionValue::Integer {
+                        value: 42,
+                        ty: u64_ty,
+                    },
+                ),
+                (
+                    "bytes".to_owned(),
+                    ExecutionValue::Sequence {
+                        values: Arc::new(vec![
+                            ExecutionValue::Byte { value: 65 },
+                            ExecutionValue::Byte { value: 66 },
+                        ]),
+                    },
+                ),
+                (
+                    "tag".to_owned(),
+                    ExecutionValue::Finite {
+                        type_identity: SemanticId("mncs:0.2:finite:test::Tag".to_owned()),
+                        variant_identity: SemanticId("mncs:0.2:variant:test::Tag::Some".to_owned()),
+                        discriminant: 1,
+                        payload: Arc::new(vec![(
+                            "val".to_owned(),
+                            ExecutionValue::Integer {
+                                value: -7,
+                                ty: IntegerType {
+                                    bits: 64,
+                                    signed: true,
+                                },
+                            },
+                        )]),
+                    },
+                ),
+                (
+                    "vec".to_owned(),
+                    ExecutionValue::Vector {
+                        values: Arc::new(vec![ExecutionValue::Integer {
+                            value: 9,
+                            ty: u64_ty,
+                        }]),
+                    },
+                ),
+            ]),
+        };
+        let reply = ProbeReply::Reference(ExecutionResult {
+            schema_version: "0.1".to_owned(),
+            status: ExecutionStatus::Returned,
+            target: ExecutionTarget {
+                module: "test.v1".to_owned(),
+                function: "f".to_owned(),
+            },
+            program_identity: None,
+            program_fingerprint: None,
+            function_identity: None,
+            returned: vec![complex],
+            steps: 3,
+            failure: None,
+            trace: Vec::new(),
+            trace_truncated: false,
+            effects: Vec::new(),
+        });
+        let encoded = serde_json::to_string(&CompactProbeReply::from_reply(&reply)).unwrap();
+        assert!(
+            encoded.ends_with("\"value_encoding\":\"compact\"}"),
+            "expected compact suffix marker in {encoded}"
+        );
+        let parsed: Value = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(
+            parsed["returned"][0],
+            json!({
+                "flag": true,
+                "count": 42,
+                "bytes": [65, 66],
+                "tag": { "$v": 1, "$p": { "val": -7 } },
+                "vec": { "vector": { "values": [9] } }
+            })
+        );
+    }
+
+    #[test]
+    fn decode_execution_request_expands_compact_sequence_hex() {
+        let standard = json!({
+            "schema_version": "0.1",
+            "target": { "module": "test.v1", "function": "f" },
+            "arguments": [
+                {
+                    "record": {
+                        "type_identity": "mncs:0.2:record:test::Snap",
+                        "name": "Snap",
+                        "fields": [[
+                            "fingerprint",
+                            { "sequence": { "values": [
+                                { "byte": { "value": 77 } },
+                                { "byte": { "value": 78 } }
+                            ] } }
+                        ]]
+                    }
+                },
+                {
+                    "sequence": {
+                        "values": [{
+                            "sequence": { "values": [
+                                { "byte": { "value": 0 } },
+                                { "byte": { "value": 255 } }
+                            ] }
+                        }]
+                    }
+                },
+                { "integer": { "value": 3, "type": { "bits": 64, "signed": false } } }
+            ],
+            "step_budget": 1000
+        });
+        let compact = json!({
+            "schema_version": "0.1",
+            "target": { "module": "test.v1", "function": "f" },
+            "arguments": [
+                {
+                    "record": {
+                        "type_identity": "mncs:0.2:record:test::Snap",
+                        "name": "Snap",
+                        "fields": [[ "fingerprint", { "sequence_hex": "4d4e" } ]]
+                    }
+                },
+                {
+                    "sequence": {
+                        "values": [{ "sequence_hex": "00ff" }]
+                    }
+                },
+                { "integer": { "value": 3, "type": { "bits": 64, "signed": false } } }
+            ],
+            "step_budget": 1000
+        });
+        let expected: ExecutionRequest = serde_json::from_value(standard).unwrap();
+        let actual = decode_execution_request(compact);
+        assert_eq!(actual, expected);
     }
 }

@@ -56,6 +56,34 @@ def toolchain_mismatches(configuration):
     return mismatches
 
 
+def current_input_paths(selectors, checkout: Path):
+    """Recompute the producer's declared file set, including new inputs."""
+    if not isinstance(selectors, list) or not selectors or not all(isinstance(x, str) for x in selectors):
+        raise ValueError('invalid source input roots')
+    checkout = Path(checkout).resolve()
+    files, visited = set(), set()
+
+    def collect(path: Path):
+        resolved = path.resolve()
+        if not resolved.is_relative_to(checkout):
+            raise ValueError('input outside selected checkout')
+        if path.is_dir():
+            if path.name in {'target', '.git', '.worktrees', '.mncs'} or resolved in visited:
+                return
+            visited.add(resolved)
+            for child in path.iterdir():
+                collect(child)
+        elif path.is_file():
+            files.add(path.resolve(strict=True).relative_to(checkout).as_posix())
+
+    for selector in selectors:
+        selector_path = Path(selector)
+        if selector_path.is_absolute():
+            raise ValueError('source input root must be checkout-relative')
+        collect(checkout / selector_path)
+    return files
+
+
 class ProviderError(RuntimeError):
     pass
 
@@ -78,9 +106,28 @@ class CompilerProvider:
         except OSError:
             return None
 
+    def _git_head_stamp(self):
+        try:
+            return subprocess.run(
+                ['git', '-C', str(self.checkout), 'rev-parse', 'HEAD'],
+                capture_output=True, text=True, timeout=5, check=True,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    def _inspection_cache_signature(self, receipt):
+        names = list(receipt['source_inputs'])
+        roots = receipt.get('source_input_roots')
+        if isinstance(roots, list):
+            names.extend(r for r in roots if isinstance(r, str))
+        return tuple((name, self._stamp(self.checkout / name)) for name in names) + (
+            (str(self.executable), self._stamp(self.executable)),
+            ('HEAD', self._git_head_stamp()),
+        )
+
     def inspect(self):
         if self._inspection is not None:
-            signature = tuple((name, self._stamp(self.checkout / name)) for name in self._inspection['producer']['receipt']['source_inputs']) + ((str(self.executable), self._stamp(self.executable)),)
+            signature = self._inspection_cache_signature(self._inspection['producer']['receipt'])
             if signature == self._inspection_signature:
                 return self._inspection
         if not self.executable.is_file():
@@ -92,17 +139,26 @@ class CompilerProvider:
             raise ProviderError('producer build receipt identity mismatch')
         mismatches = []
         mismatches.extend(toolchain_mismatches(receipt.get('build_configuration')))
+        current_revision = None
+        current_dirty_inputs = {}
         try:
-            revision = subprocess.run(['git', '-C', str(self.checkout), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+            current_revision = subprocess.run(['git', '-C', str(self.checkout), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=5, check=True).stdout.strip()
             status = subprocess.run(['git', '-C', str(self.checkout), 'status', '--porcelain=v1', '--untracked-files=all'], capture_output=True, text=True, timeout=10, check=True).stdout.splitlines()
             changed = {line[3:].rsplit(' -> ', 1)[-1] for line in status if len(line) >= 4}
-            dirty_inputs = {name: identity for name, identity in receipt['source_inputs'].items() if name in changed}
-            if revision != receipt.get('source_revision'):
-                mismatches.append('source-revision')
-            if digest(dirty_inputs) != receipt.get('dirty_content_identity') or len(dirty_inputs) != receipt.get('dirty_input_count'):
-                mismatches.append('dirty-checkout-identity')
+            current_dirty_inputs = {name: identity for name, identity in receipt['source_inputs'].items() if name in changed}
+            if 'source_input_roots' not in receipt:
+                if current_revision != receipt.get('source_revision'):
+                    mismatches.append('source-revision')
+                if digest(current_dirty_inputs) != receipt.get('dirty_content_identity') or len(current_dirty_inputs) != receipt.get('dirty_input_count'):
+                    mismatches.append('dirty-checkout-identity')
         except (OSError, subprocess.SubprocessError):
             mismatches.append('checkout-state-unavailable')
+        if 'source_input_roots' in receipt:
+            try:
+                if current_input_paths(receipt['source_input_roots'], self.checkout) != set(receipt['source_inputs']):
+                    mismatches.append('source-input-set')
+            except (OSError, ValueError):
+                mismatches.append('source-input-roots')
         for name, expected in receipt['source_inputs'].items():
             path = (self.checkout / name).resolve()
             if not path.is_relative_to(self.checkout) or not path.is_file() or file_digest(path) != expected:
@@ -113,13 +169,16 @@ class CompilerProvider:
         value = {'schema_version': 'mncs.compiler-vm-provider/1', 'state': 'stale' if mismatches else 'ready',
                 'checkout': str(self.checkout), 'executable': str(self.executable),
                 'executable_sha256': file_digest(self.executable), 'producer': producer,
+                'current_source_revision': current_revision,
+                'current_dirty_content_identity': digest(current_dirty_inputs),
+                'current_dirty_input_count': len(current_dirty_inputs),
                 'build_origin': 'input-mismatch' if mismatches else 'locally-observed-compiled-inputs',
                 'build_origin_mismatches': mismatches,
                 'mismatches': mismatches, 'artifact_schema': 'mncs.vm.artifact/1', 'ssa_schema': '0.5',
                 'vm_contract': 'mncs.vm/0.1', 'source_map_schema': 'mncs.execution-source-map/1',
                 'reference_role': 'pinned Stage-0 bootstrap; no self-hosting claim'}
         self._inspection = value
-        self._inspection_signature = tuple((name, self._stamp(self.checkout / name)) for name in receipt['source_inputs']) + ((str(self.executable), self._stamp(self.executable)),)
+        self._inspection_signature = self._inspection_cache_signature(receipt)
         return value
 
     def _inputs(self, request, info):

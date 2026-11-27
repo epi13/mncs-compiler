@@ -72,6 +72,14 @@ def encode_byte_sequence_json(raw):
     return b'{"sequence":{"values":[' + b",".join(_BYTE_JSON[b] for b in raw) + b"]}}"
 
 
+def byte_sequence_hex(raw):
+    return {"sequence_hex": raw.hex()}
+
+
+def encode_byte_sequence_hex_json(raw):
+    return b'{"sequence_hex":"' + raw.hex().encode("ascii") + b'"}'
+
+
 def decode_project_object(obj):
     """Collapse typed wire tags in one pass during json.loads."""
     if len(obj) == 1:
@@ -492,14 +500,20 @@ class Probe:
         sample_count = 0
         sample_overhead_ns = 0
         samples = []
+        scan_pos = 0
         selector = selectors.DefaultSelector()
         selector.register(proc.stdout, selectors.EVENT_READ, "stdout")
         try:
             while True:
-                newline = buffer.find(b"\n")
+                newline = buffer.find(b"\n", scan_pos)
                 if newline >= 0:
-                    line = bytes(buffer[:newline])
-                    del buffer[:newline + 1]
+                    if newline == len(buffer) - 1:
+                        buffer.pop()
+                        line = buffer
+                        self._stdout_buffers[proc.pid] = bytearray()
+                    else:
+                        line = bytes(buffer[:newline])
+                        del buffer[:newline + 1]
                     observation["wait_elapsed_ns"] = time.monotonic_ns() - started
                     observation["sample_count"] = sample_count
                     observation["sample_overhead_ns"] = sample_overhead_ns
@@ -509,6 +523,7 @@ class Probe:
                         observation["cgroup_after"] = self._cgroup_snapshot(proc.pid)
                     observation["return_code_at_response"] = proc.poll()
                     return line
+                scan_pos = len(buffer)
                 now = time.monotonic_ns()
                 if self._telemetry and now >= next_sample:
                     sampled_at = time.monotonic_ns()
@@ -530,7 +545,7 @@ class Probe:
                 interval = 0.25 if deadline is None else min(0.25, max(0.0, (deadline - now) / 1e9))
                 ready = selector.select(interval)
                 if ready:
-                    block = os.read(proc.stdout.fileno(), 65536)
+                    block = os.read(proc.stdout.fileno(), 1048576)
                     if not block:
                         observation["wait_elapsed_ns"] = time.monotonic_ns() - started
                         observation["sample_count"] = sample_count
@@ -575,6 +590,18 @@ class Probe:
                     "retained_sessions": result["retained_sessions"]}
         return result
 
+    @staticmethod
+    def _decode_reply_bytes(line, *, use_project_hook=True):
+        """Decode one probe reply line, honoring self-describing compact encoding."""
+        is_compact = line.endswith(b'"value_encoding":"compact"}')
+        if is_compact or not use_project_hook:
+            result = json.loads(line)
+            if isinstance(result, dict):
+                result.pop("value_encoding", None)
+        else:
+            result = json.loads(line, object_hook=decode_project_object)
+        return result, ("compact" if is_compact else "tagged")
+
     def send_encoded_decoded(self, encoded, *, module=PROJECT_MODULE, record_digest=True, count_request=True):
         """Send pre-encoded JSONL request bytes and decode the reply in one pass."""
         proc = self._route({"target": {"module": module}})
@@ -618,8 +645,9 @@ class Probe:
             self.digest.update(hashlib.sha256(line).digest())
         observation["digest_ns"] = time.monotonic_ns() - digest_started
         parse_started = time.monotonic_ns()
-        result = json.loads(line, object_hook=decode_project_object)
+        result, response_encoding = self._decode_reply_bytes(line)
         del line
+        observation["response_encoding"] = response_encoding
         observation["response_parse_ns"] = time.monotonic_ns() - parse_started
         observation["status"] = "RESPONSE_RECEIVED"
         observation["response_status"] = result.get("status") if isinstance(result, dict) else None
@@ -699,7 +727,8 @@ class Probe:
             self.process_observations[str(proc.pid)] = observation
             raise
         parse_started = time.monotonic_ns()
-        result = json.loads(line)
+        result, response_encoding = self._decode_reply_bytes(line, use_project_hook=False)
+        observation["response_encoding"] = response_encoding
         observation["response_parse_ns"] = time.monotonic_ns() - parse_started
         digest_started = time.monotonic_ns()
         if record_digest:
@@ -848,10 +877,11 @@ def verify_ssa_function(probe, source, function, stride=STRIDE_DEFAULT):
     })
 
 
-def source_value(identities, source_id, path, page_start, page_count, stride, total):
+def source_value(identities, source_id, path, page_start, page_count, stride, total, *, compact_request=False):
+    seq_enc = byte_sequence_hex if compact_request else byte_sequence
     return record(identities, "ProjectSource", {
-        "source_id": byte_sequence(source_id.encode()),
-        "source_path": byte_sequence(path.encode()),
+        "source_id": seq_enc(source_id.encode()),
+        "source_path": seq_enc(path.encode()),
         "page_start": integer(page_start),
         "page_count": integer(page_count),
         "stride": integer(stride),
@@ -870,6 +900,7 @@ def encode_project_request_bytes(
     target_function=None,
     extra_arguments=(),
     step_budget=8_000_000,
+    compact_request=False,
 ):
     """Encode a Project request directly to JSONL bytes without per-byte dicts."""
     flat = []
@@ -878,19 +909,24 @@ def encode_project_request_bytes(
         chunks = chunk(text, stride)
         descriptors.append((source_id, len(flat), len(chunks), stride, len(text)))
         flat.extend(chunks)
+    seq_enc = byte_sequence_hex if compact_request else byte_sequence
+    page_json_enc = encode_byte_sequence_hex_json if compact_request else encode_byte_sequence_json
     snapshot = record(identities, "ProjectSnapshot", {
-        "fingerprint": byte_sequence(hashlib.sha256(
+        "fingerprint": seq_enc(hashlib.sha256(
             b"".join(len(source[2]).to_bytes(8, "big") + source[2] for source in sources)
         ).hexdigest().encode()),
         "sources": {"sequence": {"values": [
-            source_value(identities, source_id, source_id, start, count, st, total)
+            source_value(
+                identities, source_id, source_id, start, count, st, total,
+                compact_request=compact_request,
+            )
             for source_id, start, count, st, total in descriptors
         ]}},
     })
     snapshot_bytes = json.dumps(snapshot, separators=(",", ":")).encode()
     pages_bytes = (
         b'{"sequence":{"values":['
-        + b",".join(encode_byte_sequence_json(page) for page in flat)
+        + b",".join(page_json_enc(page) for page in flat)
         + b"]}}"
     )
     args_parts = [snapshot_bytes, pages_bytes]

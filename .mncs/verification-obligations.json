@@ -2848,6 +2848,156 @@
           "invalidation_identity"
         ]
       }
+    },
+    {
+      "identity": "mncs-compiler.flow-large-module-bounds-native",
+      "title": "Flow large-module bounds handle 1,025 functions and diagnostics past the 1,024 boundary cleanly",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.flow.v1::reverse_functions",
+        "mncs:0.2:function:mncs.compiler.flow.v1::reverse_diagnostics",
+        "mncs:0.2:function:mncs.compiler.flow.v1::ssa_function_count"
+      ],
+      "invalidation_dependencies": [
+        "tests/flow_large_module_bounds_suite.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/flow_large_module_bounds_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.ssa-large-module-bounds-native",
+      "title": "Decl and Value SSA large-module bounds handle 1,025 functions, signatures, and obligations past the 1,024 boundary with positive and negative parity",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::duplicate_fn_names",
+        "mncs:0.2:function:mncs.compiler.decl.v1::merge_sig_tables",
+        "mncs:0.2:function:mncs.compiler.decl.v1::obl_has_fail",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::summary_reverse_only",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::summary_summarize_only",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::value_ssa_function_status"
+      ],
+      "invalidation_dependencies": [
+        "tests/ssa_large_module_bounds_suite.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/ssa_large_module_bounds_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.decl-long-record-identity-native",
+      "title": "Decl canonical record type identity preserves short records, emits valid surrogate keys past 512 bytes, and expands nested long field chunks",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::canonical_record_type_identity",
+        "mncs:0.2:function:mncs.compiler.decl.v1::canonical_record_type_identity_with_long",
+        "mncs:0.2:function:mncs.compiler.decl.v1::is_long_record_ref_key"
+      ],
+      "invalidation_dependencies": [
+        "tests/decl_long_record_identity_suite.mncs",
+        "src/compiler/decl.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/decl_long_record_identity_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
     }
   ]
 }

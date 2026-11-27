@@ -122,11 +122,18 @@ record LoweredUnit {
 // of making downstream consumers reconstruct their storage layout.
 record SsaFunctionCount { rest: FunctionList, count: u64 }
 fn ssa_function_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit) -> (result: u64) {
-    iterate i up_to 1024 carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } {
+    iterate chunk up_to 64 carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } {
         if st.count >= lowered.proof.fn_count || flow_function_list_empty(st.rest) { return st.count; }
-        next st = ssa_function_count_step(st);
+        next st = ssa_function_count_chunk(st, lowered.proof.fn_count);
     }
     return st.count;
+}
+fn ssa_function_count_chunk(initial: SsaFunctionCount, fn_limit: u64) -> (result: SsaFunctionCount) {
+    iterate i up_to 1024 carrying st: SsaFunctionCount = initial {
+        if st.count >= fn_limit || flow_function_list_empty(st.rest) { return st; }
+        next st = ssa_function_count_step(st);
+    }
+    return st;
 }
 fn ssa_function_count_step(st: SsaFunctionCount) -> (result: SsaFunctionCount) {
     return match st.rest { QNil => st, QCons { head: h, tail: t } => SsaFunctionCount { rest: t, count: st.count + 1 } };
@@ -137,11 +144,18 @@ fn flow_function_list_empty(functions: FunctionList) -> (result: bool) {
 record SsaFunctionLookup { rest: FunctionList, index: u64, wanted: u64, found: bool, function: FunctionFlow }
 fn ssa_function_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
     let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, elided_expressions: TypedExprList.ENil, block_count: 0, unreachable_joins: 0, verified: false };
-    iterate i up_to 1024 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } {
+    iterate chunk up_to 64 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } {
         if st.found || flow_function_list_empty(st.rest) || st.index >= lowered.proof.fn_count { return st.function; }
-        next st = ssa_function_lookup_step(st);
+        next st = ssa_function_at_chunk(st, lowered.proof.fn_count);
     }
     return st.function;
+}
+fn ssa_function_at_chunk(initial: SsaFunctionLookup, fn_limit: u64) -> (result: SsaFunctionLookup) {
+    iterate i up_to 1024 carrying st: SsaFunctionLookup = initial {
+        if st.found || flow_function_list_empty(st.rest) || st.index >= fn_limit { return st; }
+        next st = ssa_function_lookup_step(st);
+    }
+    return st;
 }
 fn ssa_function_lookup_step(st: SsaFunctionLookup) -> (result: SsaFunctionLookup) {
     if st.found { return st; }
@@ -151,6 +165,17 @@ fn ssa_cfg_blocks(function: FunctionFlow) -> (result: BlockList) { return functi
 fn ssa_cfg_entry(function: FunctionFlow) -> (result: u64) { return function.entry; }
 fn ssa_cfg_verified(function: FunctionFlow) -> (result: bool) { return function.verified; }
 fn ssa_flow_valid(lowered: LoweredUnit) -> (result: bool) { return lowered.valid && lowered.graph_ok; }
+record SsaCfgCursor { rest: FunctionList }
+record SsaCfgStep { ok: bool, function: FunctionFlow, tail: SsaCfgCursor }
+fn ssa_cfg_cursor(lowered: LoweredUnit) -> (result: SsaCfgCursor) { return SsaCfgCursor { rest: lowered.functions }; }
+fn ssa_cfg_cursor_empty(cursor: SsaCfgCursor) -> (result: bool) { return flow_function_list_empty(cursor.rest); }
+fn ssa_cfg_step(cursor: SsaCfgCursor) -> (result: SsaCfgStep) {
+    let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, elided_expressions: TypedExprList.ENil, block_count: 0, unreachable_joins: 0, verified: false };
+    return match cursor.rest {
+        QNil => SsaCfgStep { ok: false, function: empty, tail: SsaCfgCursor { rest: FunctionList.QNil } },
+        QCons { head: h, tail: t } => SsaCfgStep { ok: true, function: h, tail: SsaCfgCursor { rest: t } }
+    };
+}
 
 fn empty_block(id: u64, live: bool, join: bool) -> (result: Block) {
     return Block {
@@ -206,7 +231,15 @@ fn first_diagnostic(lowered: LoweredUnit) -> (result: Diagnostic) {
 }
 
 fn lower_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: decl.FnList, tops: decl.TopsList, function_count: u64) -> (result: FnWalk) {
-    iterate i up_to 1024 carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, function_count: 0, ok: true } {
+    let initial: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, function_count: 0, ok: true };
+    iterate chunk up_to 64 carrying d: FnWalk = initial {
+        if d.function_count >= function_count || fn_list_empty(d.rest) { return d; }
+        next d = lower_functions_chunk<P, N>(pages, stride, total, d, function_count);
+    }
+    return d;
+}
+fn lower_functions_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: FnWalk, function_count: u64) -> (result: FnWalk) {
+    iterate i up_to 1024 carrying d: FnWalk = initial {
         if d.function_count >= function_count || fn_list_empty(d.rest) { return d; }
         next d = lower_fn_step<P, N>(pages, stride, total, d);
     }
@@ -598,11 +631,18 @@ fn loop_header_scan_step(st: LoopHeaderScan) -> (result: LoopHeaderScan) {
 }
 
 fn diagnostic_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: u64) {
-    iterate i up_to 1024 carrying d: DiagCount = DiagCount { rest: list, count: 0 } {
+    iterate chunk up_to 64 carrying d: DiagCount = DiagCount { rest: list, count: 0 } {
         if diag_list_empty_local(d.rest) { return d.count; }
-        next d = count_diag_step(d);
+        next d = diagnostic_count_chunk(d);
     }
     return d.count;
+}
+fn diagnostic_count_chunk(initial: DiagCount) -> (result: DiagCount) {
+    iterate i up_to 1024 carrying d: DiagCount = initial {
+        if diag_list_empty_local(d.rest) { return d; }
+        next d = count_diag_step(d);
+    }
+    return d;
 }
 fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
     return match st.rest {
@@ -612,19 +652,35 @@ fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
 }
 
 fn append_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
+    if diag_list_empty_local(first) { return second; }
+    if diag_list_empty_local(second) { return first; }
     let rev: DiagnosticList = reverse_diagnostics<P, N>(pages, stride, total, first);
-    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: rev, acc: second } {
+    iterate chunk up_to 64 carrying d: DiagRev = DiagRev { rest: rev, acc: second } {
         if diag_list_empty_local(d.rest) { return d.acc; }
-        next d = prepend_diag_step(d);
+        next d = prepend_diagnostics_chunk(d);
     }
     return d.acc;
 }
+fn prepend_diagnostics_chunk(initial: DiagRev) -> (result: DiagRev) {
+    iterate i up_to 1024 carrying d: DiagRev = initial {
+        if diag_list_empty_local(d.rest) { return d; }
+        next d = prepend_diag_step(d);
+    }
+    return d;
+}
 fn reverse_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: DiagnosticList) {
-    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } {
+    iterate chunk up_to 64 carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } {
         if diag_list_empty_local(d.rest) { return d.acc; }
-        next d = reverse_diag_step(d);
+        next d = reverse_diagnostics_chunk(d);
     }
     return d.acc;
+}
+fn reverse_diagnostics_chunk(initial: DiagRev) -> (result: DiagRev) {
+    iterate i up_to 1024 carrying d: DiagRev = initial {
+        if diag_list_empty_local(d.rest) { return d; }
+        next d = reverse_diag_step(d);
+    }
+    return d;
 }
 fn reverse_diag_step(st: DiagRev) -> (result: DiagRev) {
     return match st.rest {
@@ -639,12 +695,27 @@ fn prepend_diag_step(st: DiagRev) -> (result: DiagRev) {
     };
 }
 
+record BoundedFnRev { rest: FunctionList, acc: FunctionList, remaining: u64 }
 fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: FunctionList, function_count: u64) -> (result: FunctionList) {
-    iterate i up_to 1024 carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } {
-        if i >= function_count || flow_function_list_empty(d.rest) { return d.acc; }
-        next d = reverse_fn_step(d);
+    iterate chunk up_to 64 carrying d: BoundedFnRev = BoundedFnRev { rest: list, acc: FunctionList.QNil, remaining: function_count } {
+        if d.remaining == 0 || flow_function_list_empty(d.rest) { return d.acc; }
+        next d = reverse_functions_chunk(d);
     }
     return d.acc;
+}
+fn reverse_functions_chunk(initial: BoundedFnRev) -> (result: BoundedFnRev) {
+    iterate i up_to 1024 carrying d: BoundedFnRev = initial {
+        if d.remaining == 0 || flow_function_list_empty(d.rest) { return d; }
+        next d = reverse_bounded_fn_step(d);
+    }
+    return d;
+}
+fn reverse_bounded_fn_step(st: BoundedFnRev) -> (result: BoundedFnRev) {
+    if st.remaining == 0 { return st; }
+    return match st.rest {
+        QNil => st,
+        QCons { head: h, tail: t } => BoundedFnRev { rest: t, acc: FunctionList.QCons { head: h, tail: st.acc }, remaining: st.remaining - 1 }
+    };
 }
 fn reverse_fn_step(st: FnRev) -> (result: FnRev) {
     return match st.rest {

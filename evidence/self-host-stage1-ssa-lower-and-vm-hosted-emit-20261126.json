@@ -1,0 +1,620 @@
+{
+  "schema": "mncs.self-host.stage1-ssa-lower-and-vm-hosted-emit-evidence/1",
+  "recorded_at_utc": "2026-11-27T05:18:00Z",
+  "milestone": {
+    "id": "self_host_stage1_ssa_lower_and_vm_hosted_emit",
+    "value_ssa_target_executed": "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa<4,32>",
+    "vm_hosted_compiler_target_executed": "mncs.compiler.vm_emit.v1::compile_and_emit_vm_module<4,32>",
+    "vm_hosted_sample_module_executed": "mncs.a.b.v1 (117 bytes)",
+    "next_frontier_probed": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_module<8,32>",
+    "status": "PASSED",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "stage1_to_stage2_rebuild": "UNKNOWN"
+  },
+  "identities": {
+    "baseline_compiler_revision": "d2392a83dd2bcdd5de5f17c58d3aa23b30b93aab",
+    "locked_stage0_oracle": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "commit": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "binary": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+      "binary_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+      "role": "Locked Stage-0 differential oracle (pre-rebuild pre-source_input_roots binary hash recorded here)"
+    },
+    "canonical_vm": {
+      "repo": "/home/epi13/Documents/Projects/mncs-vm",
+      "commit": "da99dee282336c5acdc91359b14f477745c77f77",
+      "release_binary": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+      "release_binary_sha256": "402fde9efe3e7fa27e19762889b74240a82459b0f61dd9b2aba5b02a2ccd2b38",
+      "release_sha256_at_vm_hosted_run": "2a1e3b581aa483856a350496dc019732fe69dbb4332dfbf657c218a521a077bf",
+      "debug_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+      "debug_binary_sha256": "e787a175ce0b6aa928d9f06db591b3673617d0e6c4a67bf14ecc6fa2f31f7b8c",
+      "build_origin_status_after_rebuild": "matches-embedded-inputs"
+    },
+    "isolated_emitter_transport_probe": {
+      "repo": "/home/epi13/Documents/Projects/mncs-language",
+      "base_commit": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "environment_session_id": "ses_05cb7b6e9c88ba61",
+      "scratch_id": "scratch_b5d134ceaddece449f2761cc524134ab",
+      "probe_binary": "/home/epi13/.local/share/mncs-environment/scratch/ses_05cb7b6e9c88ba61/scratch_b5d134ceaddece449f2761cc524134ab/target/release/mncs-compiler-stage0-probe",
+      "probe_binary_sha256": "9a67546e777f858100ad2fa83360a34a6a075c538cba6fade4a764fbeb42bfba",
+      "role": "Isolated host transport probe with 1 GiB Cranelift canonical arena under ulimit -v 8388608"
+    },
+    "compiler_sources": {
+      "src/compiler/decl.mncs": "311ca262e64dbda4e682d911a8c0268d6afa742facfc35b4b3f8c3cfee329eee",
+      "src/compiler/flow.mncs": "a8fc74e9ff1df0cfd3cce4ba43b9c3a742534f4af98421546eb9a0f339981ef1",
+      "src/compiler/ssa.mncs": "49de32bdaaed155c9be932043abd84b57ff27e3985d071a20e3772fa034e581f",
+      "src/compiler/project.mncs": "b7335c5ff776b941530380f651dbbe39cc6d5baef27a30fc6ece7567a0cf69f5",
+      "src/compiler/vm_emit.mncs": "a436be78f60bf60313982ede130f7c1483cf9d98a627f8bda2d0edff9774518a",
+      "tests/vm_emit_finite_enum_suite.mncs": "0388ad6a58841a41299baa3fc069817cf41a7a98290100eb592b4bdf832cb3e8",
+      "tests/vm_emit_seq_repeat_replace_suite.mncs": "2018b1ba4074b2462871fb79f917e65226bd755c893b1e0f5e931f87ceff2ba7",
+      "tests/ssa_if_join_suite.mncs": "4d66d781a42509d60eeca2365906f5919ed919c2d473b95d4c4e74843397af24",
+      "tools/stage0-probe/build.rs": "a629d4aeac4cb66505fb5d27828d547d91b41946979cb7eba789cb96f4bd0604",
+      "tools/vm_provider.py": "6e5455e6bf030822abd593fcd976129d7701b654a818e9638b975d9f0b4e9b32",
+      "tools/test_vm_provider.py": "94126a9b057d85bc5940b2ad8684742afa07e745d7401bdccafbfce2bffc4c3e",
+      "tools/compiler_diagnosis.py": "5b8d508656663f128f3c4982624be2c4b47ca85fcf927cc8278d353e5b2326e1"
+    }
+  },
+  "step1_ssa_lower_flow_unit_4_32": {
+    "target": "mncs:0.2:function:mncs.test.ssa_lower_flow_unit_caller.v1::call_lower_flow_unit_value_ssa",
+    "specialization": "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa<4,32>",
+    "selected_emitter_specialization": [
+      2048,
+      1024
+    ],
+    "total_pages": 1598,
+    "source_closure_sha256": "73631172fab7588c40825c5a28b71f45791ceb6bef8321c46ff144c924c15975",
+    "emission": {
+      "status": "emitted",
+      "detail": {
+        "ok": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "callable": null,
+        "phase": 0,
+        "ssa_kind": 0,
+        "expected_type_kind": 0,
+        "observed_type_kind": 0,
+        "observed_nominal": null,
+        "source_start": 0,
+        "source_end": 0
+      },
+      "function_count": 1805,
+      "record_type_count": 401,
+      "finite_type_count": 75,
+      "block_count": 17518,
+      "instruction_count": 51503,
+      "artifact_id": "sha256:dbcc9f8cd008ad7cd0c85eddc3e8db9277aae91a4c52b741661fdb654de52991",
+      "artifact_sha256": "52dcea8dd864b2701c49e7af9d4cc40e5437d52c499584a8e0056b983f326af5",
+      "artifact_bytes": 45728438
+    },
+    "admission": {
+      "status": "admitted",
+      "ok": true,
+      "returncode": 0
+    },
+    "execution": {
+      "status": "returned",
+      "case_summary": {
+        "status": "passed",
+        "all_expected_match_stage0": true,
+        "expected_count": 7,
+        "observed_count": 7,
+        "passed_count": 7,
+        "passed_cases": [
+          "fallthrough_join",
+          "scalar_and_direct_call",
+          "scalar_and_direct_call_layout_2",
+          "record_construct_and_project",
+          "finite_enum_match",
+          "conditional_return_counted_iteration",
+          "semantically_invalid_unit"
+        ],
+        "failed_cases": [],
+        "missing_cases": [],
+        "duplicate_cases": [],
+        "unexpected_cases": []
+      },
+      "vm_peak_rss_bytes": 314753024,
+      "max_memory_cells": 1163723
+    },
+    "emitter_probe": {
+      "elapsed_seconds": 289.181,
+      "request_bytes": 3312669,
+      "response_bytes": 127027194,
+      "response_encoding": "compact",
+      "wait_elapsed_seconds": 205.6564,
+      "response_parse_seconds": 2.9554,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 7277539328,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "probe_status": "returned",
+    "host_peak_rss_bytes": 2711429120,
+    "determinism": {
+      "status": "passed",
+      "deterministic_across_fresh_processes": true,
+      "raw_emit_equal": true,
+      "artifact_bytes_equal": true,
+      "artifact_sha256_run1": "52dcea8dd864b2701c49e7af9d4cc40e5437d52c499584a8e0056b983f326af5",
+      "artifact_sha256_run2": "52dcea8dd864b2701c49e7af9d4cc40e5437d52c499584a8e0056b983f326af5",
+      "emitter_probe_run2": {
+        "elapsed_seconds": 288.921,
+        "request_bytes": 3312669,
+        "response_bytes": 127027194,
+        "response_encoding": "compact",
+        "wait_elapsed_seconds": 205.6689,
+        "response_parse_seconds": 3.0246,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 7277191168,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      }
+    }
+  },
+  "step1_regressions_2048_1024": {
+    "control": {
+      "target": "mncs:0.2:function:mncs.test.small_finite.v1::score",
+      "specialization": null,
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "total_pages": 1,
+      "source_closure_sha256": "31d02b14485dcb1afbcba669702a46d217e32d0e20e2f1dedce2f7927abc1fb8",
+      "emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 1,
+        "record_type_count": 0,
+        "finite_type_count": 1,
+        "block_count": 12,
+        "instruction_count": 23,
+        "artifact_id": "sha256:67ad98dd2dfc42f84ebf5cf4fac2b71e9ce157a75be201ee37da08a2dd457891",
+        "artifact_sha256": "e8f0ba8645c255d9cf918e4c20248c31ee070b73a3cc0698f6ca49913d071575",
+        "artifact_bytes": 18004
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0
+      },
+      "execution": {
+        "status": "returned",
+        "vm_peak_rss_bytes": 28270592,
+        "max_memory_cells": 43
+      },
+      "emitter_probe": {
+        "elapsed_seconds": 449.047,
+        "request_bytes": 13406,
+        "response_bytes": 60535,
+        "response_encoding": "compact",
+        "wait_elapsed_seconds": 0.038,
+        "response_parse_seconds": 0.0014,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 7409803264,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "probe_status": "returned",
+      "host_peak_rss_bytes": 34271232
+    },
+    "prove_unit_4_32": {
+      "target": "mncs:0.2:function:mncs.test.prove_unit_caller.v1::call_prove_unit",
+      "specialization": "mncs.compiler.decl.v1::prove_unit<4,32>",
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "total_pages": 1145,
+      "source_closure_sha256": "a3c490f6bd09b0b5bc5438fba1ad66ba065c30a4970594cfcc02023d30a21deb",
+      "emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 1225,
+        "record_type_count": 267,
+        "finite_type_count": 56,
+        "block_count": 12604,
+        "instruction_count": 35209,
+        "artifact_id": "sha256:2f97811815513c108407e8070ed5cc2e09aa8ce4cca3f0702a3d27a79e7d418d",
+        "artifact_sha256": "8d4869d59525c95ac19d56174fe2b7b1e5efd206e404a28110d5b18646fba6dd",
+        "artifact_bytes": 32309047
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0
+      },
+      "execution": {
+        "status": "returned",
+        "case_summary": {
+          "status": "passed",
+          "all_expected_match_stage0": true,
+          "expected_count": 4,
+          "observed_count": 4,
+          "passed_count": 4,
+          "passed_cases": [
+            "valid_unit",
+            "valid_unit_layout_2",
+            "semantically_invalid_unit",
+            "finite_enum_unit"
+          ],
+          "failed_cases": [],
+          "missing_cases": [],
+          "duplicate_cases": [],
+          "unexpected_cases": []
+        },
+        "vm_peak_rss_bytes": 235790336,
+        "max_memory_cells": 193615
+      },
+      "emitter_probe": {
+        "elapsed_seconds": 225.672,
+        "request_bytes": 2376366,
+        "response_bytes": 86457399,
+        "response_encoding": "compact",
+        "wait_elapsed_seconds": 141.3968,
+        "response_parse_seconds": 2.0346,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 5967667200,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "probe_status": "returned",
+      "host_peak_rss_bytes": 1133420544
+    },
+    "flow_lower_unit_4_32": {
+      "target": "mncs:0.2:function:mncs.test.flow_lower_unit_caller.v1::call_flow_lower_unit",
+      "specialization": "mncs.compiler.flow.v1::lower_unit<4,32>",
+      "selected_emitter_specialization": [
+        2048,
+        1024
+      ],
+      "total_pages": 1187,
+      "source_closure_sha256": "3973dfcf06d8afa8d6bee9145b580c8979db67d4552483a2af40966be21ffdaf",
+      "emission": {
+        "status": "emitted",
+        "detail": {
+          "ok": true,
+          "error_code": 0,
+          "error_function": 0,
+          "error_block": 0,
+          "error_instruction": 0,
+          "callable": null,
+          "phase": 0,
+          "ssa_kind": 0,
+          "expected_type_kind": 0,
+          "observed_type_kind": 0,
+          "observed_nominal": null,
+          "source_start": 0,
+          "source_end": 0
+        },
+        "function_count": 1293,
+        "record_type_count": 285,
+        "finite_type_count": 61,
+        "block_count": 13042,
+        "instruction_count": 36736,
+        "artifact_id": "sha256:082978a91bbb5251c216d7f6d4213cd1b066a6d3482cebe313c9769dcc2ccabe",
+        "artifact_sha256": "863fa6b5faff5853ed619d1f97d338d2bacfaf2c9c86107e7ed87e3b1bfe3b24",
+        "artifact_bytes": 33437915
+      },
+      "admission": {
+        "status": "admitted",
+        "ok": true,
+        "returncode": 0
+      },
+      "execution": {
+        "status": "returned",
+        "case_summary": {
+          "status": "passed",
+          "all_expected_match_stage0": true,
+          "expected_count": 2,
+          "observed_count": 2,
+          "passed_count": 2,
+          "passed_cases": [
+            "valid_unit",
+            "semantically_invalid_unit"
+          ],
+          "failed_cases": [],
+          "missing_cases": [],
+          "duplicate_cases": [],
+          "unexpected_cases": []
+        },
+        "vm_peak_rss_bytes": 242319360,
+        "max_memory_cells": 104879
+      },
+      "emitter_probe": {
+        "elapsed_seconds": 228.101,
+        "request_bytes": 2462117,
+        "response_bytes": 90597424,
+        "response_encoding": "compact",
+        "wait_elapsed_seconds": 145.1579,
+        "response_parse_seconds": 2.1122,
+        "reported_execution_steps": 1,
+        "child_peak_rss_bytes": 6103265280,
+        "backend": "cranelift",
+        "program_released_after_identities": true
+      },
+      "probe_status": "returned",
+      "host_peak_rss_bytes": 1181470720
+    },
+    "large_module_ssa_e2e_1025_fns": "passed (1025/1025 verified)"
+  },
+  "step2_native_vm_suites": {
+    "all_14_native_suites_passed": true,
+    "decl_check_all_fns_bounds_suite": "2/2",
+    "decl_long_record_identity_suite": "3/3",
+    "decl_nominal_span_collection_suite": "2/2",
+    "decl_use_suite": "2/2",
+    "flow_large_module_bounds_suite": "1/1",
+    "ssa_if_join_suite": "5/5",
+    "ssa_large_module_bounds_suite": "6/6",
+    "vm_emit_finite_enum_suite": "3/3 (plus PASS -> FAIL -> PASS verified via mncs-test)",
+    "vm_emit_loop_suite": "3/3",
+    "vm_emit_nested_seq_suite": "3/3",
+    "vm_emit_provider_handoff_suite": "5/5",
+    "vm_emit_record_project_suite": "3/3",
+    "vm_emit_scalar_switch_suite": "3/3",
+    "vm_emit_seq_repeat_replace_suite": "3/3",
+    "python_unit_tests": {
+      "test_native_vm_artifact.py": "6/6",
+      "test_differential_evidence.py": "6/6",
+      "test_vm_provider.py": "6/6 executed (+2 skipped without local .bootstrap in WT)",
+      "mncs_vm_test_runtime_provenance.py": "5/5"
+    }
+  },
+  "step3_vm_hosted_vm_emit_module_4_32": {
+    "target": "mncs:0.2:function:mncs.test.vm_emit_module_caller.v1::call_compile_and_emit_vm_module",
+    "hosted_callable": "mncs.compiler.vm_emit.v1::compile_and_emit_vm_module<4,32>",
+    "sample_module": "mncs.a.b.v1",
+    "sample_source_bytes": 117,
+    "sample_source_sha256": "a2d686d2d7b732d8151457da1062389370791af86482bfcfa35f75c450756c96",
+    "selected_emitter_specialization": [
+      4096,
+      1024
+    ],
+    "total_pages": 2355,
+    "memory_guard_bytes": 8589934592,
+    "emitter_probe": {
+      "elapsed_seconds": 350.583,
+      "request_bytes": 4878913,
+      "response_bytes": 137683904,
+      "response_encoding": "compact",
+      "wait_elapsed_seconds": 265.9805,
+      "response_parse_seconds": 3.1639,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 7721635840,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "cold_cache_observation_note": "On cold Cranelift compilation under ulimit -v 8388608, $PROBE completed request_execution (reported_status='returned') at 707.6s and cached .json.gz before hitting SIGSEGV (-11) during 137MB JSON response_write at 8.365 GB peak RSS; on warm artifact cache hit, test_vm_hosted_vm_emit.py passed end-to-end at 7.721 GB peak RSS.",
+    "compiler_emission": {
+      "ok": true,
+      "detail": {
+        "ok": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "callable": null,
+        "phase": 0,
+        "ssa_kind": 0,
+        "expected_type_kind": 0,
+        "observed_type_kind": 0,
+        "observed_nominal": null,
+        "source_start": 0,
+        "source_end": 0
+      },
+      "function_count": 1998,
+      "record_type_count": 459,
+      "finite_type_count": 90,
+      "block_count": 19382,
+      "instruction_count": 56123
+    },
+    "compiler_artifact": {
+      "artifact_id": "sha256:0be787aa3cf455610d5cf8a1d42b9729f823f6914d49995de79e6233feba876f",
+      "artifact_sha256": "077bbaf7a1480508c7f802fb4bda692bd61659cee18b6fa7fc995f2600fc79d2",
+      "artifact_bytes": 49524405
+    },
+    "vm1_admission": {
+      "ok": true,
+      "returncode": 0
+    },
+    "vm1_execution": {
+      "deterministic_two_runs": true,
+      "matches_stage0": true,
+      "result_type_identity": "mncs:0.2:record-type:mncs.compiler.vm_emit.v1::VmEmitResult::block_count%3Au64%3Berror_block%3Au64%3Berror_code%3Au64%3Berror_detail%3AVmEmitFailureDetail%3Berror_function%3Au64%3Berror_instruction%3Au64%3Bfinite_type_count%3Au64%3Bfinite_type_ids%3Amncs%3A0.2%3Afinite-type%3Amncs.compiler.ssa.v1%3A%3AIdList%3Bfinite_types%3AVmFiniteTypeList%3Bfunction_count%3Au64%3Bfunctions%3AVmFunctionList%3Binstruction_count%3Au64%3Blong_identities%3Amncs%3A0.2%3Afinite-type%3Amncs.compiler.decl.v1%3A%3ALongIdentityList%3Bmodule_name_end%3Au64%3Bmodule_name_start%3Au64%3Bok%3Abool%3Brecord_type_count%3Au64%3Brecord_type_ids%3Amncs%3A0.2%3Afinite-type%3Amncs.compiler.ssa.v1%3A%3AIdList%3Brecord_types%3AVmRecordTypeList%3B",
+      "vm1_peak_rss_bytes": 338382848,
+      "vm1_elapsed_seconds": 2.0717,
+      "run1": {
+        "steps": 188818,
+        "max_memory_cells": 647301,
+        "ok": true,
+        "function_count": 2,
+        "block_count": 7,
+        "instruction_count": 6
+      },
+      "run2": {
+        "steps": 188818,
+        "max_memory_cells": 647301,
+        "ok": true,
+        "function_count": 2,
+        "block_count": 7,
+        "instruction_count": 6
+      }
+    },
+    "generated_artifact": {
+      "artifact_id": "sha256:be854c5bf81c5556df72fa9aa5328ea75e109967741c4e23b069fdcd7555eb83",
+      "artifact_sha256": "530140641cc8d8eb5e0d559a5182098ac7af41dd6eca0734f0005852c7eed20b",
+      "artifact_bytes": 7935
+    },
+    "vm2_admission": {
+      "ok": true,
+      "returncode": 0
+    },
+    "vm2_execution": {
+      "all_cases_passed": true,
+      "matches_stage0_outputs_and_type_identity": true,
+      "vm2_peak_rss_bytes": 28282880,
+      "vm2_elapsed_seconds": 0.0709,
+      "max_steps": 10,
+      "max_memory_cells": 7,
+      "cases": [
+        {
+          "function": "c",
+          "arg": 0,
+          "returned": 1,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 3,
+          "max_memory_cells": 3
+        },
+        {
+          "function": "c",
+          "arg": 1,
+          "returned": 2,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 3,
+          "max_memory_cells": 3
+        },
+        {
+          "function": "c",
+          "arg": 41,
+          "returned": 42,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 3,
+          "max_memory_cells": 3
+        },
+        {
+          "function": "m",
+          "arg": 0,
+          "returned": 0,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 8,
+          "max_memory_cells": 6
+        },
+        {
+          "function": "m",
+          "arg": 1,
+          "returned": 2,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 10,
+          "max_memory_cells": 7
+        },
+        {
+          "function": "m",
+          "arg": 41,
+          "returned": 42,
+          "type_identity": {
+            "bits": 64,
+            "signed": false
+          },
+          "matches_stage0": true,
+          "steps": 10,
+          "max_memory_cells": 7
+        }
+      ]
+    },
+    "status": "passed",
+    "total_wall_seconds": 496.293
+  },
+  "step5_next_frontier_project_vm_module_8_32": {
+    "target": "mncs:0.2:function:mncs.test.vm_emit_project_module_caller.v1::call_compile_and_emit_project_vm_module",
+    "hosted_callable": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_module<8,32>",
+    "minimum_supported_emitter_specialization": [
+      4096,
+      1024
+    ],
+    "selected_emitter_specialization": [
+      4096,
+      1024
+    ],
+    "total_pages": 2355,
+    "emitter_probe": {
+      "elapsed_seconds": 112.285,
+      "request_bytes": 4879228,
+      "response_bytes": 3605,
+      "response_encoding": "compact",
+      "wait_elapsed_seconds": 31.9085,
+      "response_parse_seconds": 0.0001,
+      "reported_execution_steps": 1,
+      "child_peak_rss_bytes": 5052628992,
+      "backend": "cranelift",
+      "program_released_after_identities": true
+    },
+    "probe_status": "returned",
+    "emission": {
+      "ok": false,
+      "detail": {
+        "ok": false,
+        "error_code": 4,
+        "error_function": 2,
+        "error_block": 0,
+        "error_instruction": 0,
+        "callable": "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
+        "phase": 8,
+        "ssa_kind": 8,
+        "expected_type_kind": 8,
+        "observed_type_kind": 4,
+        "observed_nominal": "mncs:0.2:record-type:mncs.compiler.project.v1::ProjectSnapshot::fingerprint%3A%5Bbyte%3B%20up_to%2064%5D%3Bsources%3A%5BProjectSource%3B%20up_to%2064%5D%3B",
+        "source_start": 282479,
+        "source_end": 282495
+      },
+      "function_count": 0,
+      "record_type_count": 0,
+      "finite_type_count": 0,
+      "block_count": 0,
+      "instruction_count": 0
+    },
+    "status": "emission_refused"
+  }
+}

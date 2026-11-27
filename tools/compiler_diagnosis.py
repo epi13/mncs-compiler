@@ -319,10 +319,23 @@ def _query_language_service(
                 env=env, capture_output=True, text=True, timeout=10, check=False,
             )
             status = json.loads(st.stdout) if st.returncode == 0 and st.stdout.strip() else {}
+            if not status.get("ready"):
+                launches += 1
+                ensured = subprocess.run(
+                    [sys.executable, str(mnls_provider), "--timeout", "15", "ensure", "--workspace", str(checkout)],
+                    env=env, capture_output=True, text=True, timeout=30, check=False,
+                )
+                if ensured.returncode == 0:
+                    launches += 1
+                    st = subprocess.run(
+                        [sys.executable, str(mnls_provider), "status", "--workspace", str(checkout)],
+                        env=env, capture_output=True, text=True, timeout=10, check=False,
+                    )
+                    status = json.loads(st.stdout) if st.returncode == 0 and st.stdout.strip() else {}
             ls_status = str(status.get("state") or "unavailable")
             ls_detail = str(status.get("detail") or "")
             if status.get("ready"):
-                ls_status = "resident_ready"
+                ls_status = "available"
                 unresolved_paths = set()
                 for identity, path in declaring_paths.items():
                     if path is None:
@@ -409,10 +422,12 @@ def _query_language_service(
             except (OSError, ValueError, subprocess.SubprocessError):
                 continue
 
+    remaining_missing = wanted - declarations.keys()
     info = {
         "provider": "mncs-language-service",
         "status": "partial_fallback_mncs_language" if inv_status == "available" else (
-            "available" if any(item["provider"] == "mncs-language-service" for item in declarations.values())
+            "available" if (ls_status == "available" and not remaining_missing)
+            or any(item["provider"] == "mncs-language-service" for item in declarations.values())
             else "unavailable"
         ),
         "resident_status": ls_status,
@@ -461,9 +476,11 @@ def _query_doctor(
         })
         # Use main checkout probe if linked worktree does not have its own .bootstrap build
         if not Path(env["MNCS_COMPILER_PROBE"]).is_file():
-            main_probe = workspace_root / "mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe"
+            main_checkout = workspace_root / "mncs-compiler"
+            main_probe = main_checkout / ".bootstrap/target/release/mncs-compiler-stage0-probe"
             if main_probe.is_file():
                 env["MNCS_COMPILER_PROBE"] = str(main_probe)
+                env["MNCS_COMPILER_CHECKOUT"] = str(main_checkout)
         try:
             launches += 1
             res = subprocess.run(

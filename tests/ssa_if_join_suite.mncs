@@ -194,3 +194,201 @@ test nested_no_else_if_join_regression() -> (result: TestResult) {
         && join3_has_x.found && !join3_has_y.found && !join3_has_z.found;
     return from_assertion(equals_bool(true, ok, 1003));
 }
+
+fn match_switch_pages() -> (result: [[byte; up_to 128]; up_to 1]) {
+    // "mncs 0.19; module t; x y e u64 Box Empty Pair v bool z match x { 0 => 10, _ => 30 } match e { Empty => 0, Pair { v: z } => 1 }" (126 bytes)
+    let page: [byte; up_to 128] = [
+        109 as byte, 110 as byte, 99 as byte, 115 as byte, 32 as byte, 48 as byte, 46 as byte, 49 as byte, 57 as byte, 59 as byte, 32 as byte, 109 as byte, 111 as byte, 100 as byte, 117 as byte, 108 as byte,
+        101 as byte, 32 as byte, 116 as byte, 59 as byte, 32 as byte, 120 as byte, 32 as byte, 121 as byte, 32 as byte, 101 as byte, 32 as byte, 117 as byte, 54 as byte, 52 as byte, 32 as byte, 66 as byte,
+        111 as byte, 120 as byte, 32 as byte, 69 as byte, 109 as byte, 112 as byte, 116 as byte, 121 as byte, 32 as byte, 80 as byte, 97 as byte, 105 as byte, 114 as byte, 32 as byte, 118 as byte, 32 as byte,
+        98 as byte, 111 as byte, 111 as byte, 108 as byte, 32 as byte, 122 as byte, 32 as byte, 109 as byte, 97 as byte, 116 as byte, 99 as byte, 104 as byte, 32 as byte, 120 as byte, 32 as byte, 123 as byte,
+        32 as byte, 48 as byte, 32 as byte, 61 as byte, 62 as byte, 32 as byte, 49 as byte, 48 as byte, 44 as byte, 32 as byte, 95 as byte, 32 as byte, 61 as byte, 62 as byte, 32 as byte, 51 as byte,
+        48 as byte, 32 as byte, 125 as byte, 32 as byte, 109 as byte, 97 as byte, 116 as byte, 99 as byte, 104 as byte, 32 as byte, 101 as byte, 32 as byte, 123 as byte, 32 as byte, 69 as byte, 109 as byte,
+        112 as byte, 116 as byte, 121 as byte, 32 as byte, 61 as byte, 62 as byte, 32 as byte, 48 as byte, 44 as byte, 32 as byte, 80 as byte, 97 as byte, 105 as byte, 114 as byte, 32 as byte, 123 as byte,
+        32 as byte, 118 as byte, 58 as byte, 32 as byte, 122 as byte, 32 as byte, 125 as byte, 32 as byte, 61 as byte, 62 as byte, 32 as byte, 49 as byte, 32 as byte, 125 as byte
+    ];
+    return [page];
+}
+
+fn switch_nominal_id() -> (result: decl.SemanticIdentity) {
+    return decl.SemanticIdentity { bytes: [50 as byte; 512], len: 4, valid: true };
+}
+
+fn switch_box_ty() -> (result: decl.SemType) {
+    return decl.SemType.TNamed { start: 31, end: 34 };
+}
+
+fn switch_box_enum_decl() -> (result: decl.EnumDecl) {
+    let field_v: decl.Field = decl.Field { name_start: 46, name_end: 47, type_start: 27, type_end: 30, type_kind: 1 };
+    let empty_v: decl.Variant = decl.Variant { name_start: 35, name_end: 40, fields: decl.FieldList.FNil };
+    let pair_v: decl.Variant = decl.Variant {
+        name_start: 41, name_end: 45,
+        fields: decl.FieldList.FCons { head: field_v, tail: decl.FieldList.FNil }
+    };
+    return decl.EnumDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 31, name_end: 34,
+        variants: decl.VariantList.VCons { head: empty_v, tail: decl.VariantList.VCons { head: pair_v, tail: decl.VariantList.VNil } },
+        decl_start: 31, decl_end: 47, cursor: 47
+    };
+}
+
+fn assemble_ssa_function(walk: ssa.SsaBlockWalk, entry_inputs: ssa.ValueList, nominals: decl.NominalTypeIdentityList) -> (result: ssa.Function) {
+    let st: ssa.SsaBuild = walk.build;
+    let normal_count: u64 = st.next_block_id;
+    let fail_block: ssa.SsaBlock = ssa.SsaBlock {
+        id: normal_count, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil,
+        instructions: ssa.InstructionList.QNil, terminator: ssa.Terminator.Fail,
+        reachable: false, has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0
+    };
+    let bound: ssa.SsaBlockList = ssa.bind_failure_targets<1, 128>(st.blocks, normal_count);
+    let blocks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: fail_block, tail: bound };
+    let fn_id: decl.SemanticIdentity = decl.SemanticIdentity { bytes: [49 as byte; 512], len: 1, valid: true };
+    return ssa.Function {
+        identity: fn_id, nominals: nominals,
+        imported_records: decl.ImportedRecordList.IRNil, imported_enums: decl.ImportedEnumList.IENil,
+        inputs: entry_inputs, result_type: u64_ty(),
+        blocks: blocks, block_count: normal_count + 1,
+        values: st.values, value_count: st.next_value,
+        supported: st.supported, verified: false
+    };
+}
+
+test finite_match_payload_arm_isolation_and_verification() -> (result: TestResult) {
+    let pages: [[byte; up_to 128]; up_to 1] = match_switch_pages();
+    let box_ty: decl.SemType = switch_box_ty();
+    let nom_id: decl.SemanticIdentity = switch_nominal_id();
+    let nominals: decl.NominalTypeIdentityList = decl.NominalTypeIdentityList.NICons {
+        head: decl.NominalTypeIdentity { start: 31, end: 34, identity: nom_id, reference: false },
+        tail: decl.NominalTypeIdentityList.NINil
+    };
+    let decls: ssa.LocalTypeDecls = ssa.LocalTypeDecls {
+        valid: true, records: decl.RecordList.RNil,
+        enums: decl.EnumList.GCons { head: switch_box_enum_decl(), tail: decl.EnumList.GNil }
+    };
+
+    // Finite match with payload binding `z` (116..117): isolated to Pair arm block 3, absent at join block 1.
+    let pat_empty: decl.FinitePattern = decl.FinitePattern {
+        has_qualifier: false, qualifier_start: 0, qualifier_end: 0, variant_start: 94, variant_end: 99,
+        has_payload: false, ignore_payload: false, bindings: decl.PayloadBindingList.YNil, start: 94, end: 99
+    };
+    let pat_pair: decl.FinitePattern = decl.FinitePattern {
+        has_qualifier: false, qualifier_start: 0, qualifier_end: 0, variant_start: 106, variant_end: 110,
+        has_payload: true, ignore_payload: false,
+        bindings: decl.PayloadBindingList.YCons {
+            head: decl.PayloadBinding { field_start: 113, field_end: 114, name_start: 116, name_end: 117 },
+            tail: decl.PayloadBindingList.YNil
+        },
+        start: 106, end: 119
+    };
+    let arm_empty: decl.TypedFiniteMatchArm = decl.TypedFiniteMatchArm {
+        pattern: pat_empty, type_identity: nom_id, payload_fields: decl.BindList.BNil,
+        ops: decl.TOpList.PCons { head: decl.TOp.TInt { value: 0, ty: u64_ty(), start: 103, end: 104 }, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    let arm_pair: decl.TypedFiniteMatchArm = decl.TypedFiniteMatchArm {
+        pattern: pat_pair, type_identity: nom_id,
+        payload_fields: decl.BindList.BCons { head: decl.Bind { start: 113, end: 114, ty: u64_ty() }, tail: decl.BindList.BNil },
+        ops: decl.TOpList.PCons { head: decl.TOp.TInt { value: 1, ty: u64_ty(), start: 123, end: 124 }, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    let fm_op: decl.TOp = decl.TOp.TFiniteMatch {
+        ty: u64_ty(), subject_ty: box_ty,
+        arms: decl.TypedFiniteMatchArmList.TFCons { head: arm_empty, tail: decl.TypedFiniteMatchArmList.TFCons { head: arm_pair, tail: decl.TypedFiniteMatchArmList.TFNil } },
+        arm_count: 2, start: 84, end: 126
+    };
+    let fm_expr: flow.TypedExpr = flow.TypedExpr {
+        role: 1, start: 84, end: 126, binding_start: 46, binding_end: 47,
+        ops: decl.TOpList.PCons { head: decl.TOp.TName { ty: box_ty, start: 25, end: 26 }, tail: decl.TOpList.PCons { head: fm_op, tail: decl.TOpList.PNil } },
+        op_count: 2
+    };
+    let f_b0: flow.Block = make_cfg_block(0, 2, 1, 0, 1, false, flow.TypedExprList.ECons { head: fm_expr, tail: flow.TypedExprList.ENil });
+    let f_ret_x: flow.TypedExpr = flow.TypedExpr {
+        role: 3, start: 21, end: 22, binding_start: 0, binding_end: 0,
+        ops: decl.TOpList.PCons { head: decl.TOp.TName { ty: u64_ty(), start: 21, end: 22 }, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    let f_b1: flow.Block = make_cfg_block(1, 3, 0, 0, 0, true, flow.TypedExprList.ECons { head: f_ret_x, tail: flow.TypedExprList.ENil });
+    let f_blocks: flow.BlockList = flow.BlockList.BCons { head: f_b0, tail: flow.BlockList.BCons { head: f_b1, tail: flow.BlockList.BNil } };
+    let vx: ssa.Value = ssa.Value { id: 0, ty: u64_ty(), owner_block: 0, kind: 0, index: 0 };
+    let vy: ssa.Value = ssa.Value { id: 1, ty: decl.SemType.TBool, owner_block: 0, kind: 0, index: 0 };
+    let ve: ssa.Value = ssa.Value { id: 2, ty: box_ty, owner_block: 0, kind: 0, index: 0 };
+    let f_inputs: ssa.ValueList = ssa.ValueList.VCons { head: vx, tail: ssa.ValueList.VCons { head: vy, tail: ssa.ValueList.VCons { head: ve, tail: ssa.ValueList.VNil } } };
+    let f_values: ssa.ValueList = ssa.ValueList.VCons { head: ve, tail: ssa.ValueList.VCons { head: vy, tail: ssa.ValueList.VCons { head: vx, tail: ssa.ValueList.VNil } } };
+    let f_env: ssa.Environment = ssa.Environment.EnvCons {
+        head: ssa.Binding { name_start: 21, name_end: 22, value: 0, ty: u64_ty() },
+        tail: ssa.Environment.EnvCons {
+            head: ssa.Binding { name_start: 23, name_end: 24, value: 1, ty: decl.SemType.TBool },
+            tail: ssa.Environment.EnvCons { head: ssa.Binding { name_start: 25, name_end: 26, value: 2, ty: box_ty }, tail: ssa.Environment.EnvNil }
+        }
+    };
+    let f_seed: ssa.SsaBuild = ssa.SsaBuild {
+        rest: f_blocks, edges: ssa.EdgeList.ENil, join_scopes: ssa.JoinScopeList.JSNil, blocks: ssa.SsaBlockList.LNil,
+        values: f_values, inputs: f_inputs, entry_env: f_env, next_value: 3, next_instruction: 0, next_block_id: 2,
+        result_type: u64_ty(), identity: ssa.invalid_identity(), nominals: nominals, entry: 0, supported: true, initial_failure_kind: 0
+    };
+    let f_walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 128>(pages, 128, 126, 2, f_seed);
+    let pair_arm_lk: ssa.BlockLookup = ssa.find_block<1, 128>(pages, 128, 126, f_walk.build.blocks, 3);
+    let arm_has_z: ssa.BindingLookup = ssa.lookup_binding_exact_span(pair_arm_lk.block.parameter_bindings, 116, 117);
+    let b1_in: ssa.Incoming = ssa.incoming_for<1, 128>(pages, 128, 126, 1, f_walk.build.edges);
+    let join_has_z: ssa.BindingLookup = ssa.lookup_binding_exact_span(b1_in.bindings, 116, 117);
+    let join_has_y: ssa.BindingLookup = ssa.lookup_binding_exact_span(b1_in.bindings, 23, 24);
+    let f_fn: ssa.Function = assemble_ssa_function(f_walk, f_inputs, nominals);
+    let finite_verified: bool = ssa.verify_function_base_with_decls<1, 128>(pages, 128, 126, f_fn, decls);
+    let ok: bool = f_walk.processed == 2 && f_walk.build.supported
+        && pair_arm_lk.found && arm_has_z.found && !(join_has_z.found)
+        && join_has_y.found && decl.is_bool_ty(join_has_y.binding.ty)
+        && finite_verified;
+    return from_assertion(equals_bool(true, ok, 1004));
+}
+
+test scalar_switch_lowering_and_verification() -> (result: TestResult) {
+    let pages: [[byte; up_to 128]; up_to 1] = match_switch_pages();
+    let decls: ssa.LocalTypeDecls = ssa.LocalTypeDecls {
+        valid: true, records: decl.RecordList.RNil,
+        enums: decl.EnumList.GCons { head: switch_box_enum_decl(), tail: decl.EnumList.GNil }
+    };
+    let s_arm0: decl.TypedScalarMatchArm = decl.TypedScalarMatchArm {
+        is_default: false, negative: false, value: 0, overflow: false, pattern_start: 65, pattern_end: 66,
+        ops: decl.TOpList.PCons { head: decl.TOp.TInt { value: 10, ty: u64_ty(), start: 70, end: 72 }, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    let s_arm1: decl.TypedScalarMatchArm = decl.TypedScalarMatchArm {
+        is_default: true, negative: false, value: 0, overflow: false, pattern_start: 74, pattern_end: 75,
+        ops: decl.TOpList.PCons { head: decl.TOp.TInt { value: 30, ty: u64_ty(), start: 79, end: 81 }, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    let sm_op: decl.TOp = decl.TOp.TMatch {
+        ty: u64_ty(), subject_ty: u64_ty(),
+        arms: decl.TypedScalarMatchArmList.TSCons { head: s_arm0, tail: decl.TypedScalarMatchArmList.TSCons { head: s_arm1, tail: decl.TypedScalarMatchArmList.TSNil } },
+        arm_count: 2, default_count: 1, start: 55, end: 83
+    };
+    let sm_expr: flow.TypedExpr = flow.TypedExpr {
+        role: 3, start: 55, end: 83, binding_start: 0, binding_end: 0,
+        ops: decl.TOpList.PCons { head: decl.TOp.TName { ty: u64_ty(), start: 21, end: 22 }, tail: decl.TOpList.PCons { head: sm_op, tail: decl.TOpList.PNil } },
+        op_count: 2
+    };
+    let s_b0: flow.Block = make_cfg_block(0, 3, 0, 0, 0, false, flow.TypedExprList.ECons { head: sm_expr, tail: flow.TypedExprList.ENil });
+    let s_blocks: flow.BlockList = flow.BlockList.BCons { head: s_b0, tail: flow.BlockList.BNil };
+    let vx: ssa.Value = ssa.Value { id: 0, ty: u64_ty(), owner_block: 0, kind: 0, index: 0 };
+    let s_inputs: ssa.ValueList = ssa.ValueList.VCons { head: vx, tail: ssa.ValueList.VNil };
+    let s_env: ssa.Environment = ssa.Environment.EnvCons { head: ssa.Binding { name_start: 21, name_end: 22, value: 0, ty: u64_ty() }, tail: ssa.Environment.EnvNil };
+    let s_seed: ssa.SsaBuild = ssa.SsaBuild {
+        rest: s_blocks, edges: ssa.EdgeList.ENil, join_scopes: ssa.JoinScopeList.JSNil, blocks: ssa.SsaBlockList.LNil,
+        values: s_inputs, inputs: s_inputs, entry_env: s_env, next_value: 1, next_instruction: 0, next_block_id: 1,
+        result_type: u64_ty(), identity: ssa.invalid_identity(), nominals: decl.NominalTypeIdentityList.NINil, entry: 0, supported: true, initial_failure_kind: 0
+    };
+    let s_walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 128>(pages, 128, 126, 1, s_seed);
+    let s_fn: ssa.Function = assemble_ssa_function(s_walk, s_inputs, decl.NominalTypeIdentityList.NINil);
+    let scalar_verified: bool = ssa.verify_function_base_with_decls<1, 128>(pages, 128, 126, s_fn, decls);
+    let bad_sm_op: decl.TOp = decl.TOp.TMatch {
+        ty: u64_ty(), subject_ty: u64_ty(),
+        arms: decl.TypedScalarMatchArmList.TSCons { head: s_arm0, tail: decl.TypedScalarMatchArmList.TSNil },
+        arm_count: 1, default_count: 1, start: 55, end: 83
+    };
+    let bad_sm_expr: flow.TypedExpr = flow.TypedExpr {
+        role: 3, start: 55, end: 83, binding_start: 0, binding_end: 0,
+        ops: decl.TOpList.PCons { head: decl.TOp.TName { ty: u64_ty(), start: 21, end: 22 }, tail: decl.TOpList.PCons { head: bad_sm_op, tail: decl.TOpList.PNil } },
+        op_count: 2
+    };
+    let bad_b0: flow.Block = make_cfg_block(0, 3, 0, 0, 0, false, flow.TypedExprList.ECons { head: bad_sm_expr, tail: flow.TypedExprList.ENil });
+    let bad_walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 128>(pages, 128, 126, 1, ssa.SsaBuild { ..s_seed, rest: flow.BlockList.BCons { head: bad_b0, tail: flow.BlockList.BNil } });
+    let bad_fn: ssa.Function = assemble_ssa_function(bad_walk, s_inputs, decl.NominalTypeIdentityList.NINil);
+    let bad_scalar_rejected: bool = !(ssa.verify_function_base_with_decls<1, 128>(pages, 128, 126, bad_fn, decls));
+    let ok: bool = s_walk.processed == 1 && s_walk.build.supported && scalar_verified && bad_scalar_rejected;
+    return from_assertion(equals_bool(true, ok, 1005));
+}

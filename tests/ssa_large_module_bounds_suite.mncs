@@ -1,0 +1,339 @@
+mncs 0.18;
+module tests.compiler_ssa_large_module_bounds;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.parser.v1 as parser;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Single 424-byte page literal containing `"mncs 0.18; module m; fn helper() -> (r: u64) { return 7; } "`
+// followed by 360 De-Bruijn-paired ASCII letters at offsets 64..423, giving 1,025 unique 2..4 byte spans in O(1) setup steps.
+fn sample_page_512() -> (result: [byte; up_to 512]) {
+    return [
+        109, 110, 99, 115, 32, 48, 46, 49, 56, 59, 32, 109, 111, 100, 117, 108,
+        101, 32, 109, 59, 32, 102, 110, 32, 104, 101, 108, 112, 101, 114, 40, 41,
+        32, 45, 62, 32, 40, 114, 58, 32, 117, 54, 52, 41, 32, 123, 32, 114,
+        101, 116, 117, 114, 110, 32, 55, 59, 32, 125, 32, 32, 32, 32, 32, 32,
+        65, 66, 73, 70, 107, 116, 69, 100, 119, 90, 85, 108, 65, 67, 80, 67,
+        81, 74, 77, 104, 89, 78, 111, 86, 115, 120, 103, 82, 81, 75, 84, 101,
+        68, 87, 122, 117, 76, 97, 98, 105, 102, 75, 85, 109, 72, 121, 110, 79,
+        118, 83, 88, 71, 114, 113, 106, 109, 73, 71, 115, 121, 111, 87, 65, 68,
+        88, 72, 122, 118, 84, 102, 76, 98, 106, 110, 80, 68, 89, 79, 119, 97,
+        99, 112, 99, 113, 107, 117, 77, 105, 103, 83, 89, 80, 69, 101, 69, 102,
+        77, 106, 111, 88, 73, 72, 65, 69, 103, 84, 103, 85, 110, 81, 76, 99,
+        114, 114, 115, 122, 119, 98, 107, 118, 85, 111, 89, 81, 77, 107, 119, 99,
+        115, 65, 70, 108, 66, 74, 78, 112, 100, 120, 104, 90, 86, 116, 70, 109,
+        74, 79, 120, 105, 104, 97, 100, 121, 112, 101, 70, 110, 82, 82, 83, 90,
+        87, 66, 75, 86, 117, 78, 113, 108, 67, 82, 84, 104, 98, 108, 68, 90,
+        88, 74, 80, 70, 111, 90, 89, 82, 85, 112, 102, 78, 114, 116, 71, 116,
+        72, 66, 76, 100, 122, 120, 106, 112, 103, 86, 118, 86, 119, 100, 65, 71,
+        117, 79, 121, 113, 109, 75, 87, 67, 83, 97, 101, 71, 118, 87, 68, 97,
+        102, 79, 122, 121, 114, 117, 80, 71, 119, 101, 72, 67, 84, 105, 105, 106,
+        113, 110, 83, 98, 109, 76, 101, 73, 73, 74, 81, 78, 115, 66, 77, 108,
+        69, 104, 99, 116, 73, 75, 88, 75, 89, 83, 99, 117, 81, 79, 65, 72,
+        68, 98, 110, 84, 106, 114, 118, 88, 76, 102, 80, 72, 69, 105, 107, 120,
+        107, 121, 115, 67, 85, 113, 111, 97, 103, 87, 69, 106, 115, 68, 99, 118,
+        89, 84, 107, 122, 122, 65, 73, 76, 103, 88, 77, 109, 77, 110, 85, 114,
+        119, 102, 81, 80, 73, 77, 111, 98, 111, 99, 119, 103, 89, 85, 115, 69,
+        107, 65, 74, 82, 86, 120, 108, 70, 112, 104, 100, 66, 78, 116, 74, 83,
+        100, 67, 86, 121, 116, 75, 90, 90
+    ];
+}
+
+fn id_start(idx: u64) -> (result: u64) { return 64 + idx % 342; }
+fn id_len(idx: u64) -> (result: u64) { return 2 + idx / 342; }
+
+fn sample_pages() -> (result: [[byte; up_to 512]; up_to 1]) {
+    return [sample_page_512()];
+}
+
+fn sample_header() -> (result: parser.Header) {
+    return parser.Header {
+        state: 8, code: 0, start: 0, end: 20,
+        version_start: 5, version_end: 9,
+        module_start: 18, module_end: 19,
+        next_offset: 20
+    };
+}
+
+record NameGen { idx: u64, acc: decl.NameList }
+
+fn prepend_one_name(idx: u64, acc: decl.NameList) -> (result: decl.NameList) {
+    let s: u64 = 64 + idx % 342;
+    let l: u64 = 2 + idx / 342;
+    return decl.NameList.NCons { head: decl.NameSpan { start: s, end: s + l }, tail: acc };
+}
+
+fn prepend_distinct_names(count: u64, tail: decl.NameList) -> (result: decl.NameList) {
+    let a1: decl.NameList = prepend_one_name(count - 1, tail);
+    let a2: decl.NameList = prepend_one_name(count - 2, a1);
+    let a3: decl.NameList = prepend_one_name(count - 3, a2);
+    let a4: decl.NameList = prepend_one_name(count - 4, a3);
+    let a5: decl.NameList = prepend_one_name(count - 5, a4);
+    let a6: decl.NameList = prepend_one_name(count - 6, a5);
+    let a7: decl.NameList = prepend_one_name(count - 7, a6);
+    iterate step up_to 127 carrying st: NameGen = NameGen { idx: count - 7, acc: a7 } {
+        if st.idx == 0 { return st.acc; }
+        let idx: u64 = st.idx;
+        let n1: decl.NameList = prepend_one_name(idx - 1, st.acc);
+        let n2: decl.NameList = prepend_one_name(idx - 2, n1);
+        let n3: decl.NameList = prepend_one_name(idx - 3, n2);
+        let n4: decl.NameList = prepend_one_name(idx - 4, n3);
+        let n5: decl.NameList = prepend_one_name(idx - 5, n4);
+        let n6: decl.NameList = prepend_one_name(idx - 6, n5);
+        let n7: decl.NameList = prepend_one_name(idx - 7, n6);
+        let n8: decl.NameList = prepend_one_name(idx - 8, n7);
+        next st = NameGen { idx: idx - 8, acc: n8 };
+    }
+    return st.acc;
+}
+
+fn cons8_obl(stub: decl.Obligation, acc: decl.OblList) -> (result: decl.OblList) {
+    let a1: decl.OblList = decl.OblList.LCons { head: stub, tail: acc };
+    let a2: decl.OblList = decl.OblList.LCons { head: stub, tail: a1 };
+    let a3: decl.OblList = decl.OblList.LCons { head: stub, tail: a2 };
+    let a4: decl.OblList = decl.OblList.LCons { head: stub, tail: a3 };
+    let a5: decl.OblList = decl.OblList.LCons { head: stub, tail: a4 };
+    let a6: decl.OblList = decl.OblList.LCons { head: stub, tail: a5 };
+    let a7: decl.OblList = decl.OblList.LCons { head: stub, tail: a6 };
+    return decl.OblList.LCons { head: stub, tail: a7 };
+}
+
+fn prepend_1024_pass_obls(tail: decl.OblList) -> (result: decl.OblList) {
+    let pass_obl: decl.Obligation = decl.Obligation { kind: 1, start: 24, end: 30, status: 0 };
+    iterate step up_to 128 carrying acc: decl.OblList = tail {
+        next acc = cons8_obl(pass_obl, acc);
+    }
+    return acc;
+}
+
+fn cons8_sig(stub: decl.Sig, acc: decl.SigTab) -> (result: decl.SigTab) {
+    let a1: decl.SigTab = decl.SigTab.HCons { head: stub, tail: acc };
+    let a2: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a1 };
+    let a3: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a2 };
+    let a4: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a3 };
+    let a5: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a4 };
+    let a6: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a5 };
+    let a7: decl.SigTab = decl.SigTab.HCons { head: stub, tail: a6 };
+    return decl.SigTab.HCons { head: stub, tail: a7 };
+}
+
+fn prepend_1023_sig_entries(tail: decl.SigTab, name_start: u64, name_end: u64) -> (result: decl.SigTab) {
+    let base: decl.Sig = decl.Sig {
+        start: name_start, end: name_end,
+        params: decl.BindList.BNil, nparams: 0,
+        generic_bounds: decl.GenericBoundList.KNil,
+        result: decl.SemType.TInt { width: 64, signed: false },
+        fx: decl.EffectList.XNil,
+        raw_capabilities: decl.CapList.ANil,
+        effects: decl.EffectIdentityList.EINil,
+        capabilities: decl.CapabilityIdentityList.CINil,
+        identity: decl.invalid_semantic_identity()
+    };
+    let s1: decl.SigTab = decl.SigTab.HCons { head: base, tail: tail };
+    let s2: decl.SigTab = decl.SigTab.HCons { head: base, tail: s1 };
+    let s3: decl.SigTab = decl.SigTab.HCons { head: base, tail: s2 };
+    let s4: decl.SigTab = decl.SigTab.HCons { head: base, tail: s3 };
+    let s5: decl.SigTab = decl.SigTab.HCons { head: base, tail: s4 };
+    let s6: decl.SigTab = decl.SigTab.HCons { head: base, tail: s5 };
+    let s7: decl.SigTab = decl.SigTab.HCons { head: base, tail: s6 };
+    iterate step up_to 127 carrying acc: decl.SigTab = s7 {
+        next acc = cons8_sig(base, acc);
+    }
+    return acc;
+}
+
+fn tag_identity(tag: u64) -> (result: decl.SemanticIdentity) {
+    let b: decl.SemanticIdentity = decl.canonical_function_identity<1, 512>(sample_pages(), 512, 424, 18, 19, 24, 30);
+    let mod_bytes: [byte; 512] = replace(b.bytes, 23, (65 + tag % 26) as byte);
+    let mod_bytes2: [byte; 512] = replace(mod_bytes, 24, (65 + (tag / 26) % 26) as byte);
+    return decl.SemanticIdentity { bytes: mod_bytes2, len: b.len, valid: true };
+}
+
+fn make_ssa_fn(id: decl.SemanticIdentity, verified: bool, call_id: decl.SemanticIdentity, has_call: bool) -> (result: ssa.Function) {
+    let u64_ty: decl.SemType = decl.SemType.TInt { width: 64, signed: false };
+    let ret_val: ssa.Value = ssa.Value { id: 0, ty: u64_ty, owner_block: 0, kind: 2, index: 0 };
+    let call_inst: ssa.Instruction = ssa.Instruction {
+        id: 0, sequence: 0, kind: 3, operator: 0, result: 0, ty: u64_ty,
+        inputs: ssa.IdList.INil, argc: 0, params: decl.BindList.BNil,
+        identity: call_id, nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 24, end: 32
+    };
+    let insts: ssa.InstructionList = select_insts(has_call, call_inst);
+    let b0: ssa.SsaBlock = ssa.SsaBlock {
+        id: 0, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil,
+        instructions: insts, terminator: ssa.Terminator.Return { value: 0 },
+        reachable: true, has_failure_target: true, failure_target: 1,
+        lowering_ok: true, lowering_failure_kind: 0
+    };
+    return ssa.Function {
+        identity: id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil,
+        imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ssa.ValueList.VNil, result_type: u64_ty,
+        blocks: ssa.SsaBlockList.LCons { head: b0, tail: ssa.SsaBlockList.LNil },
+        block_count: 1,
+        values: ssa.ValueList.VCons { head: ret_val, tail: ssa.ValueList.VNil },
+        value_count: 1, supported: true, verified: verified
+    };
+}
+
+fn select_insts(has_call: bool, call_inst: ssa.Instruction) -> (result: ssa.InstructionList) {
+    if has_call { return ssa.InstructionList.QCons { head: call_inst, tail: ssa.InstructionList.QNil }; }
+    return ssa.InstructionList.QNil;
+}
+
+test decl_duplicate_names_1025_past_1024() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+    let late_s: u64 = id_start(1024);
+    let helper_span: decl.NameSpan = decl.NameSpan { start: 24, end: 30 };
+    let unique_tail: decl.NameList = decl.NameList.NCons { head: decl.NameSpan { start: late_s, end: late_s + id_len(1024) }, tail: decl.NameList.NNil };
+    let names_1025_unique: decl.NameList = decl.NameList.NCons { head: helper_span, tail: prepend_distinct_names(1023, unique_tail) };
+    let no_dup: decl.DupReport = decl.duplicate_fn_names<1, 512>(pages, 512, total, names_1025_unique);
+    return from_assertion(equals_bool(false, no_dup.found, 7601));
+}
+
+test decl_duplicate_names_catches_late_dup_past_1024() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+    let helper_span: decl.NameSpan = decl.NameSpan { start: 24, end: 30 };
+    let dup_tail: decl.NameList = decl.NameList.NCons { head: helper_span, tail: decl.NameList.NNil };
+    let names_1025_dup: decl.NameList = decl.NameList.NCons { head: helper_span, tail: prepend_distinct_names(1023, dup_tail) };
+    let late_dup: decl.DupReport = decl.duplicate_fn_names<1, 512>(pages, 512, total, names_1025_dup);
+    let ok: bool = late_dup.found && late_dup.start == 24 && late_dup.end == 30;
+    return from_assertion(equals_bool(true, ok, 7606));
+}
+
+test decl_sig_and_obligation_bounds_past_1024() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+    let late_sig: decl.SigTab = decl.SigTab.HCons {
+        head: decl.Sig {
+            start: 24, end: 30, params: decl.BindList.BNil, nparams: 0,
+            generic_bounds: decl.GenericBoundList.KNil, result: decl.SemType.TBool,
+            fx: decl.EffectList.XNil, raw_capabilities: decl.CapList.ANil,
+            effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+            identity: decl.invalid_semantic_identity()
+        },
+        tail: decl.SigTab.HNil
+    };
+    let mids: decl.SigTab = prepend_1023_sig_entries(late_sig, 40, 43);
+    let local_tab: decl.SigTab = decl.SigTab.HCons {
+        head: decl.Sig {
+            start: 5, end: 9, params: decl.BindList.BNil, nparams: 0,
+            generic_bounds: decl.GenericBoundList.KNil, result: decl.SemType.TInt { width: 64, signed: false },
+            fx: decl.EffectList.XNil, raw_capabilities: decl.CapList.ANil,
+            effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+            identity: decl.invalid_semantic_identity()
+        },
+        tail: decl.SigTab.HNil
+    };
+    let merged_tab: decl.SigTab = decl.merge_sig_tables<1, 512>(pages, 512, total, local_tab, mids);
+    let found_late: decl.SigRes = decl.sig_lookup<1, 512>(pages, 512, total, merged_tab, 24, 30);
+    let found_early: decl.SigRes = decl.sig_lookup<1, 512>(pages, 512, total, merged_tab, 5, 9);
+
+    let fail_obl: decl.Obligation = decl.Obligation { kind: 27, start: 18, end: 19, status: 1 };
+    let obls_1025: decl.OblList = prepend_1024_pass_obls(decl.OblList.LCons { head: fail_obl, tail: decl.OblList.LNil });
+    let has_fail: bool = decl.obl_has_fail<1, 512>(pages, 512, total, obls_1025);
+    let fail_span: decl.ExprSpan = decl.first_fail_span<1, 512>(pages, 512, total, obls_1025);
+
+    let ok: bool = found_early.found
+        && found_late.found
+        && has_fail
+        && fail_span.start == 18 && fail_span.end == 19;
+    return from_assertion(equals_bool(true, ok, 7604));
+}
+
+test ssa_1025_reverse_and_lookup_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+
+    let id_helper: decl.SemanticIdentity = tag_identity(0);
+    let id_early: decl.SemanticIdentity = tag_identity(1);
+    let id_mid: decl.SemanticIdentity = tag_identity(2);
+    let id_late: decl.SemanticIdentity = tag_identity(3);
+    let fn_early: ssa.Function = make_ssa_fn(id_early, true, id_helper, true);
+    let fn_mid: ssa.Function = make_ssa_fn(id_mid, true, id_helper, false);
+    let fn_late_ok: ssa.Function = make_ssa_fn(id_late, true, id_helper, true);
+
+    let rev0: ssa.ValueSsaSummary = ssa.summary_prepend_function(ssa.empty_ssa_summary(true), fn_early);
+    let rev1: ssa.ValueSsaSummary = ssa.summary_prepend_repeated(rev0, fn_mid, 1023);
+    let rev_1025_ok: ssa.ValueSsaSummary = ssa.summary_prepend_function(rev1, fn_late_ok);
+    let revd: ssa.ValueSsaSummary = ssa.summary_reverse_only<1, 512>(pages, 512, total, rev_1025_ok);
+    let early_st: ssa.ValueSsaFunctionStatus = ssa.value_ssa_function_status(revd, 0);
+    let late_st: ssa.ValueSsaFunctionStatus = ssa.value_ssa_function_status(revd, 1024);
+    let late_lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(revd, 1024);
+
+    let ok: bool = revd.function_count == 1025
+        && early_st.found && early_st.verified && decl.semantic_identity_equal(early_st.identity, id_early)
+        && late_st.found && late_st.verified && decl.semantic_identity_equal(late_st.identity, id_late)
+        && !(decl.semantic_identity_equal(late_st.identity, early_st.identity))
+        && late_lookup.found && late_lookup.function.verified && decl.semantic_identity_equal(late_lookup.function.identity, id_late);
+    return from_assertion(equals_bool(true, ok, 7602));
+}
+
+fn make_empty_ssa_fn(id: decl.SemanticIdentity, verified: bool) -> (result: ssa.Function) {
+    let u64_ty: decl.SemType = decl.SemType.TInt { width: 64, signed: false };
+    return ssa.Function {
+        identity: id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil,
+        imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ssa.ValueList.VNil, result_type: u64_ty,
+        blocks: ssa.SsaBlockList.LNil, block_count: 0,
+        values: ssa.ValueList.VNil, value_count: 0,
+        supported: true, verified: verified
+    };
+}
+
+test ssa_1025_summarize_valid_fns_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+
+    let id_helper: decl.SemanticIdentity = tag_identity(0);
+    let id_early: decl.SemanticIdentity = tag_identity(1);
+    let id_mid: decl.SemanticIdentity = tag_identity(2);
+    let id_late: decl.SemanticIdentity = tag_identity(3);
+    let fn_early: ssa.Function = make_ssa_fn(id_early, true, id_helper, true);
+    let fn_mid: ssa.Function = make_empty_ssa_fn(id_mid, true);
+    let fn_late_ok: ssa.Function = make_ssa_fn(id_late, true, id_helper, true);
+
+    let fwd0: ssa.ValueSsaSummary = ssa.summary_prepend_function(ssa.empty_ssa_summary(true), fn_late_ok);
+    let fwd1: ssa.ValueSsaSummary = ssa.summary_prepend_repeated(fwd0, fn_mid, 1023);
+    let fwd_1025_ok: ssa.ValueSsaSummary = ssa.summary_prepend_function(fwd1, fn_early);
+    let sum_ok: ssa.ValueSsaSummary = ssa.summary_summarize_only<1, 512>(pages, 512, total, fwd_1025_ok, true);
+
+    let ok: bool = sum_ok.valid
+        && sum_ok.function_count == 1025
+        && sum_ok.supported_function_count == 1025
+        && sum_ok.verified_function_count == 1025
+        && sum_ok.call_count == 2
+        && sum_ok.has_call;
+    return from_assertion(equals_bool(true, ok, 7607));
+}
+
+test ssa_1025_catches_invalid_fn_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 512]; up_to 1] = sample_pages();
+    let total: u64 = 424;
+
+    let id_helper: decl.SemanticIdentity = tag_identity(0);
+    let id_early: decl.SemanticIdentity = tag_identity(1);
+    let id_mid: decl.SemanticIdentity = tag_identity(2);
+    let id_late: decl.SemanticIdentity = tag_identity(3);
+    let fn_early: ssa.Function = make_ssa_fn(id_early, true, id_helper, true);
+    let fn_mid: ssa.Function = make_empty_ssa_fn(id_mid, true);
+    let fn_late_bad: ssa.Function = make_ssa_fn(id_late, false, id_helper, false);
+
+    let bad0: ssa.ValueSsaSummary = ssa.summary_prepend_function(ssa.empty_ssa_summary(true), fn_late_bad);
+    let bad1: ssa.ValueSsaSummary = ssa.summary_prepend_repeated(bad0, fn_mid, 1023);
+    let fwd_1025_bad: ssa.ValueSsaSummary = ssa.summary_prepend_function(bad1, fn_early);
+    let sum_bad: ssa.ValueSsaSummary = ssa.summary_summarize_only<1, 512>(pages, 512, total, fwd_1025_bad, true);
+    let bad_late_st: ssa.ValueSsaFunctionStatus = ssa.value_ssa_function_status(sum_bad, 1024);
+
+    let ok: bool = !(sum_bad.valid) && sum_bad.function_count == 1025 && sum_bad.verified_function_count == 1024
+        && bad_late_st.found && !(bad_late_st.verified) && decl.semantic_identity_equal(bad_late_st.identity, id_late);
+    return from_assertion(equals_bool(true, ok, 7605));
+}

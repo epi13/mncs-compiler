@@ -1,0 +1,121 @@
+mncs 0.18;
+module tests.compiler_flow_large_module_bounds;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.flow.v1 as flow;
+use mncs.compiler.parser.v1 as parser;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+fn sample_pages() -> (result: [[byte; up_to 64]; up_to 1]) {
+    let p0: [byte; up_to 64] = [
+        109, 110, 99, 115, 32, 48, 46, 49, 56, 59, 32, 109, 111, 100, 117, 108,
+        101, 32, 109, 59
+    ];
+    return [p0];
+}
+
+fn sample_header() -> (result: parser.Header) {
+    return parser.Header {
+        state: 8, code: 0, start: 0, end: 20,
+        version_start: 5, version_end: 9,
+        module_start: 18, module_end: 19,
+        next_offset: 20
+    };
+}
+
+fn cons8_flow(stub: flow.FunctionFlow, acc: flow.FunctionList) -> (result: flow.FunctionList) {
+    let a1: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: acc };
+    let a2: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a1 };
+    let a3: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a2 };
+    let a4: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a3 };
+    let a5: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a4 };
+    let a6: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a5 };
+    let a7: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: a6 };
+    return flow.FunctionList.QCons { head: stub, tail: a7 };
+}
+
+fn prepend_1023_flow_fns(stub: flow.FunctionFlow, tail: flow.FunctionList) -> (result: flow.FunctionList) {
+    let s1: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: tail };
+    let s2: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s1 };
+    let s3: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s2 };
+    let s4: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s3 };
+    let s5: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s4 };
+    let s6: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s5 };
+    let s7: flow.FunctionList = flow.FunctionList.QCons { head: stub, tail: s6 };
+    iterate step up_to 127 carrying acc: flow.FunctionList = s7 {
+        next acc = cons8_flow(stub, acc);
+    }
+    return acc;
+}
+
+fn cons8_diag(stub: flow.Diagnostic, acc: flow.DiagnosticList) -> (result: flow.DiagnosticList) {
+    let a1: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: acc };
+    let a2: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a1 };
+    let a3: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a2 };
+    let a4: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a3 };
+    let a5: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a4 };
+    let a6: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a5 };
+    let a7: flow.DiagnosticList = flow.DiagnosticList.DCons { head: stub, tail: a6 };
+    return flow.DiagnosticList.DCons { head: stub, tail: a7 };
+}
+
+fn prepend_1024_diags(stub: flow.Diagnostic, tail: flow.DiagnosticList) -> (result: flow.DiagnosticList) {
+    iterate step up_to 128 carrying acc: flow.DiagnosticList = tail {
+        next acc = cons8_diag(stub, acc);
+    }
+    return acc;
+}
+
+test flow_1025_fns_and_diagnostics_past_1024_boundary() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = sample_pages();
+    let total: u64 = 20;
+
+    let early_flow: flow.FunctionFlow = flow.FunctionFlow {
+        fn_start: 21, fn_end: 58, entry: 0, blocks: flow.BlockList.BNil,
+        elided_expressions: flow.TypedExprList.ENil, block_count: 1, unreachable_joins: 0, verified: true
+    };
+    let mid_flow: flow.FunctionFlow = flow.FunctionFlow {
+        fn_start: 60, fn_end: 90, entry: 0, blocks: flow.BlockList.BNil,
+        elided_expressions: flow.TypedExprList.ENil, block_count: 1, unreachable_joins: 0, verified: true
+    };
+    let late_flow: flow.FunctionFlow = flow.FunctionFlow {
+        fn_start: 100, fn_end: 200, entry: 0, blocks: flow.BlockList.BNil,
+        elided_expressions: flow.TypedExprList.ENil, block_count: 2, unreachable_joins: 0, verified: false
+    };
+
+    // Reverse [early_flow, 1023x mid_flow, late_flow] -> forward via flow.reverse_functions
+    let rev: flow.FunctionList = flow.FunctionList.QCons {
+        head: late_flow,
+        tail: prepend_1023_flow_fns(mid_flow, flow.FunctionList.QCons { head: early_flow, tail: flow.FunctionList.QNil })
+    };
+    let fwd: flow.FunctionList = flow.reverse_functions<1, 64>(pages, 64, total, rev, 1025);
+    let base_unit: decl.Unit = decl.Unit {
+        ok: true, err_start: 0, err_end: 0, header: sample_header(),
+        uses: decl.UseList.UNil, records: decl.RecordList.RNil, enums: decl.EnumList.GNil,
+        fns: decl.FnList.DNil, cursor: 20
+    };
+    let base_proof: decl.UnitProve = decl.UnitProve {
+        ok: true, err_start: 0, err_end: 0, unit: base_unit,
+        obls: decl.OblList.LNil, tops: decl.TopsList.TLNil, fn_count: 1025
+    };
+    let lowered: flow.LoweredUnit = flow.LoweredUnit {
+        valid: false, graph_ok: true, proof: base_proof,
+        functions: fwd, diagnostics: flow.DiagnosticList.DNil, block_count: 1026
+    };
+
+    let flow_count: u64 = flow.ssa_function_count<1, 64>(pages, 64, total, lowered);
+    let early_got: flow.FunctionFlow = flow.ssa_function_at<1, 64>(pages, 64, total, lowered, 0);
+    let late_got: flow.FunctionFlow = flow.ssa_function_at<1, 64>(pages, 64, total, lowered, 1024);
+
+    let d_pass: flow.Diagnostic = flow.Diagnostic { code: 1, start: 1, end: 2 };
+    let d_late: flow.Diagnostic = flow.Diagnostic { code: 99, start: 500, end: 510 };
+    let diags: flow.DiagnosticList = prepend_1024_diags(d_pass, flow.DiagnosticList.DCons { head: d_late, tail: flow.DiagnosticList.DNil });
+    let diag_total: u64 = flow.diagnostic_count<1, 64>(pages, 64, total, diags);
+
+    let ok: bool = flow_count == 1025
+        && early_got.fn_start == 21 && flow.ssa_cfg_verified(early_got)
+        && late_got.fn_start == 100 && late_got.block_count == 2 && !(flow.ssa_cfg_verified(late_got))
+        && diag_total == 1025;
+    return from_assertion(equals_bool(true, ok, 7603));
+}
